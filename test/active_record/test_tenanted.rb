@@ -76,7 +76,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_includes log.string, "[tenant=foo]"
 
     result = nil
-    assert_silent do
+    assert_silent do # no migration, we load the schema instead
       with_stubbed_configurations(PRIMARY_TENANTED_CONFIG) do
         ActiveRecord::Base.connected_to(shard: "bar") do
           result = [Note.create(content: "qwer"), Note.count]
@@ -138,7 +138,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_includes log.string, "[tenant=foo]"
 
     result = nil
-    assert_silent do
+    assert_silent do # no migration, we load the schema instead
       with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
         ActiveRecord::Base.connected_to(shard: "bar") do
           result = [Note.create(content: "qwer"), Note.count]
