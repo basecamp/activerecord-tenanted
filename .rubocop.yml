@@ -12,6 +12,7 @@ AllCops:
   SuggestExtensions: false
   Exclude:
     - '**/tmp/**/*'
+    - '**/vendor/**/*'
     - 'CHANGELOG.md'
 
 Performance:
