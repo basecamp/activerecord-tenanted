@@ -56,6 +56,9 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
 
     Object.const_set :Note, Class.new(ApplicationRecord)
 
+    log = StringIO.new
+    logger_was, ActiveRecord::Base.logger = ActiveRecord::Base.logger, ActiveSupport::Logger.new(log)
+
     result = nil
     assert_output(/migrating.*create_table/m, nil) do
       with_stubbed_configurations(PRIMARY_TENANTED_CONFIG) do
@@ -70,6 +73,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_equal 1, result.last
     assert File.exist?("tmp/storage/primary-foo.sqlite3")
     assert File.exist?("tmp/db/schema.rb")
+    assert_includes log.string, "[tenant=foo]"
 
     result = nil
     assert_silent do
@@ -83,8 +87,10 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_instance_of Note, result.first
     assert_equal "qwer", result.first.content
     assert_equal 1, result.last
+    assert_includes log.string, "[tenant=bar]"
   ensure
     ActiveRecord.application_record_class = nil
+    ActiveRecord::Base.logger = logger_was
     Object.send(:remove_const, :Note)
     Object.send(:remove_const, :ApplicationRecord)
   end
@@ -112,6 +118,9 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
 
     Object.const_set :Note, Class.new(SecondaryRecord)
 
+    log = StringIO.new
+    logger_was, ActiveRecord::Base.logger = ActiveRecord::Base.logger, ActiveSupport::Logger.new(log)
+
     result = nil
     assert_output(/migrating.*create_table/m, nil) do
       with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
@@ -126,6 +135,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_equal 1, result.last
     assert File.exist?("tmp/storage/secondary-foo.sqlite3")
     assert File.exist?("tmp/db/secondary_schema.rb")
+    assert_includes log.string, "[tenant=foo]"
 
     result = nil
     assert_silent do
@@ -139,8 +149,10 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_instance_of Note, result.first
     assert_equal "qwer", result.first.content
     assert_equal 1, result.last
+    assert_includes log.string, "[tenant=bar]"
   ensure
     ActiveRecord.application_record_class = nil
+    ActiveRecord::Base.logger = logger_was
     Object.send(:remove_const, :Note)
     Object.send(:remove_const, :SecondaryRecord)
     Object.send(:remove_const, :ApplicationRecord)
