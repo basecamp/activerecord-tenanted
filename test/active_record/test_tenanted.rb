@@ -34,6 +34,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
 
   def teardown
     FileUtils.rm_rf("tmp")
+    ActiveRecord::Base.connection_handler = ActiveRecord::ConnectionAdapters::ConnectionHandler.new
     super
   end
 
@@ -42,7 +43,10 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     config = with_stubbed_configurations(PRIMARY_TENANTED_CONFIG) do
       ActiveRecord::Base.configurations.configs_for(include_hidden: true)
     end
-    assert_instance_of ActiveRecord::Tenanted::DatabaseConfigurations::TemplateConfig, config.first
+
+    assert_pattern do
+      config => [ActiveRecord::Tenanted::DatabaseConfigurations::TemplateConfig]
+    end
   end
 
   test "primary: schema and migrations" do
@@ -89,8 +93,13 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     config = with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
       ActiveRecord::Base.configurations.configs_for(include_hidden: true)
     end
-    assert_instance_of ActiveRecord::DatabaseConfigurations::HashConfig, config.first
-    assert_instance_of ActiveRecord::Tenanted::DatabaseConfigurations::TemplateConfig, config.last
+
+    assert_pattern do
+      config => [
+        ActiveRecord::DatabaseConfigurations::HashConfig,
+        ActiveRecord::Tenanted::DatabaseConfigurations::TemplateConfig
+      ]
+    end
   end
 
   test "secondary: schema and migrations" do
