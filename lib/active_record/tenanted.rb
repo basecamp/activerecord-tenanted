@@ -45,9 +45,20 @@ module ActiveRecord
       def create_tenanted_pool
         base_config = ActiveRecord::Base.configurations.resolve(tenant_config_name.to_sym)
 
-        tenant_name = "#{tenant_config_name}_#{current_shard}"
+        tenant_shard = current_shard
+        tenant_name = "#{tenant_config_name}_#{tenant_shard}"
+
+        tenant_hash = Digest::MD5.hexdigest(tenant_shard.to_s)
+        format_specifiers = {
+          tenant: tenant_shard,
+          tenant_hash1: tenant_hash[0..1], # 255
+          tenant_hash2: tenant_hash[2..3], # x 255 = 64 thousand
+          tenant_hash3: tenant_hash[4..5], # x 255 = 16 million
+          tenant_hash4: tenant_hash[6..7]  # x 255 = 4.2 billion
+        }
+
         config_hash = base_config.configuration_hash.dup
-        config_hash[:database] = config_hash[:database] % { tenant: current_shard }
+        config_hash[:database] = config_hash[:database] % format_specifiers
         config_hash[:tenant_config_name] = tenant_config_name
         config_hash[:tenant] = current_shard
         config = Tenanted::DatabaseConfigurations::TenantConfig.new(base_config.env_name, tenant_name, config_hash)
