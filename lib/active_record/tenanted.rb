@@ -48,13 +48,13 @@ module ActiveRecord
         tenant_shard = current_shard
         tenant_name = "#{tenant_config_name}_#{tenant_shard}"
 
-        tenant_hash = Digest::MD5.hexdigest(tenant_shard.to_s)
+        tenant_hash = Digest::MD5.hexdigest(tenant_shard.to_s).chars.each_slice(2).take(4).map(&:join)
         format_specifiers = {
           tenant: tenant_shard,
-          tenant_hash1: tenant_hash[0..1], # 255
-          tenant_hash2: tenant_hash[2..3], # x 255 = 64 thousand
-          tenant_hash3: tenant_hash[4..5], # x 255 = 16 million
-          tenant_hash4: tenant_hash[6..7]  # x 255 = 4.2 billion
+          tenant_hash1: tenant_hash[0], # 255
+          tenant_hash2: File.join(tenant_hash[0..1]), # x 255 = 64 thousand
+          tenant_hash3: File.join(tenant_hash[0..2]), # x 255 = 16 million
+          tenant_hash4: File.join(tenant_hash[0..3])  # x 255 = 4.2 billion
         }
 
         config_hash = base_config.configuration_hash.dup

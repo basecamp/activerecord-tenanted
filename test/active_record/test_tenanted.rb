@@ -21,7 +21,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
       secondary: {
         tenanted: true,
         adapter: "sqlite3",
-        database: "tmp/storage/%{tenant_hash1}/%{tenant_hash2}/%{tenant_hash3}/%{tenant_hash4}/secondary-%{tenant}.sqlite3",
+        database: "tmp/storage/%{tenant_hash4}/secondary-%{tenant}.sqlite3",
         migrations_paths: "test/fixtures/migrations",
       }
     }
