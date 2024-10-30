@@ -25,9 +25,11 @@ module ActiveRecord
         end
 
         def schema_dump(format = ActiveRecord.schema_format)
-          return super if primary?
-
-          "#{tenant_config_name}_schema.rb"
+          if configuration_hash.key?(:schema_dump) || primary?
+            super
+          else
+            "#{tenant_config_name}_#{schema_file_type(format)}"
+          end
         end
 
         def new_connection
