@@ -21,7 +21,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
       secondary: {
         tenanted: true,
         adapter: "sqlite3",
-        database: "tmp/storage/secondary-%{tenant}.sqlite3",
+        database: "tmp/storage/%{tenant_hash4}/secondary-%{tenant}.sqlite3",
         migrations_paths: "test/fixtures/migrations",
       }
     }
@@ -133,7 +133,16 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_instance_of Note, result.first
     assert_equal "asdf", result.first.content
     assert_equal 1, result.last
-    assert File.exist?("tmp/storage/secondary-foo.sqlite3")
+
+    # MD5 should be considered part of the API contract
+    tenant_hash = Digest::MD5.hexdigest("foo")
+    hash1 = tenant_hash[0..1]
+    hash2 = tenant_hash[2..3]
+    hash3 = tenant_hash[4..5]
+    hash4 = tenant_hash[6..7]
+
+    path = "tmp/storage/#{hash1}/#{hash2}/#{hash3}/#{hash4}/secondary-foo.sqlite3"
+    assert File.exist?(path), "Expected #{path} to exist"
     assert File.exist?("tmp/db/secondary_schema.rb")
     assert_includes log.string, "[tenant=foo]"
 

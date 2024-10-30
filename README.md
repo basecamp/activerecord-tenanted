@@ -81,6 +81,31 @@ In this case:
 - migrations will be located at the default location `db/secondary_migrate/`
 
 
+#### Hashed directory structure
+
+For applications with a large number of tenants, it may be preferable to use a "hashed directory structure" to avoid having many database files in the same directory.
+
+For the purposes of creating nesteed directories, the following format specifiers are available (in addition to `tenant`:
+
+- `tenant_hash1` - first two hexadecimal characters of the MD5 signature of the tenant
+- `tenant_hash2` - next two characters as a subdirectory of hash1
+- `tenant_hash3` - next two characters as a subdirectory of hash2
+- `tenant_hash4` - next two characters as a subdirectory of hash3
+
+So, for example, for a tenant of `foo` which hashes to `acbd18db4cc2f85cedef654fccc4a4d8`:
+
+- `tenant_hash1` = `ac`
+- `tenant_hash2` = `ac/bd`
+- `tenant_hash3` = `ac/bd/18`
+- `tenant_hash4` = `ac/bd/18/db`
+
+And so for a database config of:
+
+> `storage/%{tenant_hash4}/%{tenant}.sqlite3`
+
+the application could have 4.2 billion tenants without exceeding 255 entries in any directory.
+
+
 ### Configuring Active Record
 
 The primary database may be configured as tenanted in ApplicationRecord this way:
