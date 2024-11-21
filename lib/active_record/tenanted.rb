@@ -43,6 +43,9 @@ module ActiveRecord
       end
 
       def create_tenanted_pool
+        # ensure all classes use the same connection pool
+        return superclass.create_tenanted_pool unless connection_class
+
         base_config = ActiveRecord::Base.configurations.resolve(tenant_config_name.to_sym)
 
         tenant_shard = current_shard

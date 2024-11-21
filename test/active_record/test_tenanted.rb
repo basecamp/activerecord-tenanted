@@ -95,6 +95,34 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     Object.send(:remove_const, :ApplicationRecord)
   end
 
+  test "primary: shared connection pool" do
+    Object.const_set :ApplicationRecord, Class.new(ActiveRecord::Base)
+    ApplicationRecord.primary_abstract_class
+    ApplicationRecord.tenanted
+
+    Object.const_set :Note, Class.new(ApplicationRecord)
+    Object.const_set :Post, Class.new(ApplicationRecord)
+
+    note_pool = nil
+    post_pool = nil
+
+    assert_output(/migrating.*create_table/m, nil) do
+      with_stubbed_configurations(PRIMARY_TENANTED_CONFIG) do
+        ActiveRecord::Base.connected_to(shard: "foo") do
+          note_pool = Note.connection_pool
+          post_pool = Post.connection_pool
+        end
+      end
+    end
+
+    assert_not_nil note_pool
+    assert_same note_pool, post_pool
+  ensure
+    Object.send(:remove_const, :Note)
+    Object.send(:remove_const, :Post)
+    Object.send(:remove_const, :ApplicationRecord)
+  end
+
   test "secondary: config handler creates a template config" do
     config = with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
       ActiveRecord::Base.configurations.configs_for(include_hidden: true)
@@ -124,7 +152,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     result = nil
     assert_output(/migrating.*create_table/m, nil) do
       with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
-        ActiveRecord::Base.connected_to(shard: "foo") do
+        SecondaryRecord.connected_to(shard: "foo") do
           result = [Note.create(content: "asdf"), Note.count]
         end
       end
@@ -149,7 +177,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     result = nil
     assert_silent do # no migration, we load the schema instead
       with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
-        ActiveRecord::Base.connected_to(shard: "bar") do
+        SecondaryRecord.connected_to(shard: "bar") do
           result = [Note.create(content: "qwer"), Note.count]
         end
       end
@@ -163,6 +191,38 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     ActiveRecord.application_record_class = nil
     ActiveRecord::Base.logger = logger_was
     Object.send(:remove_const, :Note)
+    Object.send(:remove_const, :SecondaryRecord)
+    Object.send(:remove_const, :ApplicationRecord)
+  end
+
+  test "secondary: shared connection pool" do
+    Object.const_set :ApplicationRecord, Class.new(ActiveRecord::Base)
+    ApplicationRecord.primary_abstract_class
+
+    Object.const_set :SecondaryRecord, Class.new(ActiveRecord::Base)
+    SecondaryRecord.abstract_class = true
+    SecondaryRecord.tenanted :secondary
+
+    Object.const_set :Note, Class.new(SecondaryRecord)
+    Object.const_set :Post, Class.new(SecondaryRecord)
+
+    note_pool = nil
+    post_pool = nil
+
+    assert_output(/migrating.*create_table/m, nil) do
+      with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
+        SecondaryRecord.connected_to(shard: "foo") do
+          note_pool = Note.connection_pool
+          post_pool = Post.connection_pool
+        end
+      end
+    end
+
+    assert_not_nil note_pool
+    assert_same note_pool, post_pool
+  ensure
+    Object.send(:remove_const, :Note)
+    Object.send(:remove_const, :Post)
     Object.send(:remove_const, :SecondaryRecord)
     Object.send(:remove_const, :ApplicationRecord)
   end
