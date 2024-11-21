@@ -13,22 +13,21 @@ module ActiveRecord
       def initialize(...)
         super
 
-        @tenant_config_name = nil
+        @tenanted_config_name = nil
       end
 
-      def tenanted(tenant_config_name = "primary")
+      def tenanted(config_name = "primary")
         extend Base
 
-        @tenant_config_name = tenant_config_name
-
+        @tenanted_config_name = config_name
         self.connection_class = true
       end
     end
 
     # mixed into an Active Record class when `tenanted` is called
     module Base
-      def tenant_config_name
-        @tenant_config_name ||= (superclass.respond_to?(:tenant_config_name) ? superclass.tenant_config_name : nil)
+      def tenanted_config_name
+        @tenanted_config_name ||= (superclass.respond_to?(:tenanted_config_name) ? superclass.tenanted_config_name : nil)
       end
 
       def connection_pool
@@ -42,14 +41,14 @@ module ActiveRecord
         pool
       end
 
-      def create_tenanted_pool
+      def create_tenanted_pool # :nodoc:
         # ensure all classes use the same connection pool
-        return superclass.create_tenanted_pool unless connection_class
+        return superclass.create_tenanted_pool unless connection_class?
 
-        base_config = ActiveRecord::Base.configurations.resolve(tenant_config_name.to_sym)
+        base_config = ActiveRecord::Base.configurations.resolve(tenanted_config_name.to_sym)
 
         tenant_shard = current_shard
-        tenant_name = "#{tenant_config_name}_#{tenant_shard}"
+        tenant_name = "#{tenanted_config_name}_#{tenant_shard}"
 
         tenant_hash = Digest::MD5.hexdigest(tenant_shard.to_s).chars.each_slice(2).take(4).map(&:join)
         format_specifiers = {
@@ -62,7 +61,7 @@ module ActiveRecord
 
         config_hash = base_config.configuration_hash.dup
         config_hash[:database] = config_hash[:database] % format_specifiers
-        config_hash[:tenant_config_name] = tenant_config_name
+        config_hash[:tenanted_config_name] = tenanted_config_name
         config_hash[:tenant] = current_shard
         config = Tenanted::DatabaseConfigurations::TenantConfig.new(base_config.env_name, tenant_name, config_hash)
 
@@ -70,7 +69,7 @@ module ActiveRecord
         ensure_schema_migrations(config)
       end
 
-      def ensure_schema_migrations(config)
+      def ensure_schema_migrations(config) # :nodoc:
         ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(config) do |conn|
           pool = conn.pool
           unless pool.schema_migration.table_exists?
