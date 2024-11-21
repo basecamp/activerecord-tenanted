@@ -145,6 +145,19 @@ class PrivateNotes < TenantedRecord
 end
 ```
 
+### Configuring Active Storage to use the tenanted database
+
+It's possible to set up Active Storage to use the tenanted database. In an initializer:
+
+``` ruby
+ActiveSupport.on_load(:active_storage_record) do
+  tenanted_with "TenantedRecord"
+end
+```
+
+where `"TenantedRecord"` is the name of the abstract base class for the tenanted models.
+
+
 ### Automatic tenant switching
 
 ⚠ Note that this is only supported for **primary** tenanted databases, due to a limitation in Rails's `ShardSelector` middleware.

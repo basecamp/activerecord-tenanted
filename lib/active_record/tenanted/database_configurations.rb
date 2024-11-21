@@ -16,19 +16,19 @@ module ActiveRecord
           configuration_hash.fetch(:tenant)
         end
 
-        def tenant_config_name
-          configuration_hash.fetch(:tenant_config_name)
+        def tenanted_config_name
+          configuration_hash.fetch(:tenanted_config_name)
         end
 
         def primary?
-          ActiveRecord::Base.configurations.primary?(tenant_config_name)
+          ActiveRecord::Base.configurations.primary?(tenanted_config_name)
         end
 
         def schema_dump(format = ActiveRecord.schema_format)
           if configuration_hash.key?(:schema_dump) || primary?
             super
           else
-            "#{tenant_config_name}_#{schema_file_type(format)}"
+            "#{tenanted_config_name}_#{schema_file_type(format)}"
           end
         end
 
