@@ -17,6 +17,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
       primary: {
         adapter: "sqlite3",
         database: "tmp/storage/primary.sqlite3",
+        migrations_paths: "test/fixtures/migrations",
       },
       secondary: {
         tenanted: true,
@@ -206,25 +207,36 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     Object.const_set :Note, Class.new(SecondaryRecord)
     Object.const_set :Post, Class.new(SecondaryRecord)
 
+    Object.const_set :Song, Class.new(ApplicationRecord)
+    Song.tenanted_with "SecondaryRecord"
+
     note_pool = nil
     post_pool = nil
+    song_pool = nil
 
     assert_output(/migrating.*create_table/m, nil) do
       with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
         SecondaryRecord.connected_to(shard: "foo") do
           note_pool = Note.connection_pool
           post_pool = Post.connection_pool
+          song_pool = Song.connection_pool
         end
       end
     end
 
     assert_not_nil note_pool
     assert_same note_pool, post_pool
+    assert_same note_pool, song_pool
   ensure
-    Object.send(:remove_const, :Note)
-    Object.send(:remove_const, :Post)
-    Object.send(:remove_const, :SecondaryRecord)
-    Object.send(:remove_const, :ApplicationRecord)
+    begin
+      Object.send(:remove_const, :Note)
+      Object.send(:remove_const, :Post)
+      Object.send(:remove_const, :Song)
+      Object.send(:remove_const, :SecondaryRecord)
+      Object.send(:remove_const, :ApplicationRecord)
+    rescue => e
+      puts "Error during test cleanup: #{e}"
+    end
   end
 
   private

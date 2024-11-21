@@ -14,6 +14,7 @@ module ActiveRecord
         super
 
         @tenanted_config_name = nil
+        @tenanted_with_class_name = nil
       end
 
       def tenanted(config_name = "primary")
@@ -21,6 +22,12 @@ module ActiveRecord
 
         @tenanted_config_name = config_name
         self.connection_class = true
+      end
+
+      def tenanted_with(class_name)
+        extend Sharer
+
+        @tenanted_with_class_name = class_name
       end
     end
 
@@ -83,6 +90,16 @@ module ActiveRecord
             ActiveRecord::Tasks::DatabaseTasks.dump_schema(config) if Rails.env.development?
           end
         end
+      end
+    end
+
+    module Sharer
+      def tenanted_with_class
+        @tenanted_with_class ||= (@tenanted_with_class_name.present? ? Object.const_get(@tenanted_with_class_name) : superclass.tenanted_with_class)
+      end
+
+      def connection_pool
+        tenanted_with_class.connection_pool
       end
     end
   end
