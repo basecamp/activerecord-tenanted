@@ -19,7 +19,7 @@ bundle add active_record-tenanted
 
 ## Usage
 
-⚠ If you're not familiar with how Rails's built-in sharding works, it may be worth reading the Rails Guide on [Multiple Databases with Active Record](https://guides.rubyonrails.org/active_record_multiple_databases.html#setting-up-your-application) before proceeding.
+⚠ If you're not familiar with how Rails's built-in horizontal sharding works, it may be worth reading the Rails Guide on [Multiple Databases with Active Record](https://guides.rubyonrails.org/active_record_multiple_databases.html#setting-up-your-application) before proceeding.
 
 ### Configuring `database.yml`
 
@@ -37,11 +37,9 @@ development:
   tenanted: true
 
 production:
-  primary:
-    <<: *default
-    database: storage/production_%{tenant}.sqlite3
-    tenanted: true
-
+  <<: *default
+  database: storage/production_%{tenant}.sqlite3
+  tenanted: true
 ```
 
 In this case:
@@ -61,6 +59,7 @@ development:
   secondary:
     <<: *default
     database: storage/development_tenant/%{tenant}.sqlite3
+    migrations_paths: db/secondary_migrate
     tenanted: true
 
 production:
@@ -78,7 +77,7 @@ In this case:
 
 - the database file for tenant "foo" would be located on disk at `storage/production_tenant/foo.sqlite3`.
 - the schema file (once created, see below) will be located at `db/secondary_schema.rb`.
-- migrations will be located at the default location `db/secondary_migrate/`
+- migrations will be located under `db/secondary_migrate/`
 
 
 #### Hashed directory structure
@@ -112,17 +111,17 @@ The primary database may be configured as tenanted in ApplicationRecord this way
 
 ``` ruby
 class ApplicationRecord < ActiveRecord::Base
-  self.abstract_class = true
+  primary_abstract_class
 
   tenanted
 end
 ```
 
-where any tenanted models should then inherit from that common abstract class:
+where any tenanted models should then inherit from that common abstract connection class:
 
 ``` ruby
 class PrivateNotes < ApplicationRecord
-  # this model will be stored in the tenanted primary database file
+  # this model will be stored in a tenanted primary database file
 end
 ```
 
@@ -141,7 +140,7 @@ where any tenanted models should then inherit from that common abstract class:
 
 ``` ruby
 class PrivateNotes < TenantedRecord
-  # this model will be stored in the tenanted secondary database file
+  # this model will be stored in a tenanted secondary database file
 end
 ```
 
@@ -160,8 +159,6 @@ where `"TenantedRecord"` is the name of the abstract base class for the tenanted
 
 ### Automatic tenant switching
 
-⚠ Note that this is only supported for **primary** tenanted databases, due to a limitation in Rails's `ShardSelector` middleware.
-
 Because the tenant behavior is built on top of Rails's sharding functionality, we can use the [`ShardSelector` middleware](https://guides.rubyonrails.org/active_record_multiple_databases.html#activating-automatic-shard-switching) to set the tenant for the duration of a request.
 
 First, create a new file `config/initializers/tenanted_db.rb` with the following contents:
@@ -169,6 +166,15 @@ First, create a new file `config/initializers/tenanted_db.rb` with the following
 ``` ruby
 Rails.application.configure do
   config.active_record.shard_selector = { lock: true }
+  config.active_record.shard_resolver = ->(request) { your_code_here }
+end
+```
+
+⚠ Note that until Rails 8.1, automatic tenant switching is only supported for the primary database, due to a limitation in Rails's `ShardSelector` middleware. In Rails 8.1 you can specify the abstract connection class:
+
+``` ruby
+Rails.application.configure do
+  config.active_record.shard_selector = { lock: true, class_name: "TenantedRecord" }
   config.active_record.shard_resolver = ->(request) { your_code_here }
 end
 ```
@@ -182,6 +188,7 @@ Rails.application.configure do
 end
 ```
 
+
 ### Granular database connection switching
 
 If you need to access multiple tenants, you can use `ActiveRecord::Base.connected_to` to dynamically change tenant:
@@ -194,9 +201,10 @@ tenant1_note = ActiveRecord::Base.connected_to(shard: "foo") { Note.first }
 tenant2_note = ActiveRecord::Base.connected_to(shard: "bar") { Note.first }
 ```
 
+
 ### Logging
 
-All logs emitted by tenanted database connections will contain the tenant identifier, for example:
+All logs emitted by tenanted database connections will automaticaly contain the tenant identifier, for example:
 
 ```
 Note Load [tenant=foo] (0.1ms)  SELECT "notes".* FROM "notes" ORDER BY "notes"."id" ASC LIMIT 1 /*application='Exploration'*/
