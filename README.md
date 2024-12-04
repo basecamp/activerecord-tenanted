@@ -212,6 +212,31 @@ Note Load [tenant=foo] (0.1ms)  SELECT "notes".* FROM "notes" ORDER BY "notes"."
 ```
 
 
+### Setting up testing
+
+For testing, it's necessary to set up a "default" tenant that will be used implicitly for all the tests
+
+In non-parallel testing, add code like this to your test helper:
+
+``` ruby
+TenantedRecord.connecting_to(shard: "default")
+```
+
+For parallel testing, add code like this to your test helper:
+
+``` ruby
+module ActiveSupport
+  class TestCase
+    parallelize(workers: :number_of_processors)
+
+    parallelize_setup do |j|
+      TenantedRecord.connecting_to(shard: j)
+    end
+  end
+end
+```
+
+
 ### Database tasks, schemas, and migrations
 
 The nature of the tenanted database file is that it's created when the tenant is first accessed. This requires that the schema file also be created dynamically, and migrations to be applied at runtime. So some differences you'll notice in a tenanted database:
