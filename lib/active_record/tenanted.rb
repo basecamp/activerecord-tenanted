@@ -95,7 +95,7 @@ module ActiveRecord
 
     module Sharer
       def tenanted_with_class
-        @tenanted_with_class ||= (@tenanted_with_class_name.present? ? Object.const_get(@tenanted_with_class_name) : superclass.tenanted_with_class)
+        @tenanted_with_class ||= @tenanted_with_class_name&.constantize || superclass.tenanted_with_class
       end
 
       def connection_pool
