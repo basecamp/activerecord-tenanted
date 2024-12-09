@@ -43,6 +43,8 @@ module ActiveRecord
   end
 end
 
-require "rails/generators/active_record/migration.rb"
-ActiveRecord::Generators::Migration.prepend(ActiveRecord::Tenanted::Patches::Migration)
-ActiveRecord::Tasks::DatabaseTasks.prepend(ActiveRecord::Tenanted::Patches::DatabaseTasks)
+ActiveSupport.on_load(:active_record) do
+  require "rails/generators/active_record/migration.rb"
+  ActiveRecord::Generators::Migration.prepend(ActiveRecord::Tenanted::Patches::Migration)
+  ActiveRecord::Tasks::DatabaseTasks.prepend(ActiveRecord::Tenanted::Patches::DatabaseTasks)
+end
