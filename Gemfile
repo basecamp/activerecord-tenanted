@@ -16,3 +16,5 @@ gem "rubocop-minitest", "~> 0.36"
 gem "rubocop-packaging", "~> 0.5"
 gem "rubocop-performance", "~> 1.22"
 gem "rubocop-rails", "~> 2.26"
+
+gem "rails", github: "rails/rails", branch: "main"
