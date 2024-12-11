@@ -42,6 +42,7 @@ module ActiveRecord
 
       # TODO: upstream this to prevent the tenanted template config from creating transactional
       # fixtures on an unnecessary database, which would result in sporadic locking errors.
+      # see https://github.com/rails/rails/pull/53139 for the introduction of this method.
       module TestFixtures
         def transactional_tests_for_pool?(pool)
           return false if pool.db_config.instance_of?(ActiveRecord::Tenanted::DatabaseConfigurations::TemplateConfig)
