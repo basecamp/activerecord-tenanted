@@ -3,45 +3,8 @@
 require "test_helper"
 
 class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
-  PRIMARY_TENANTED_CONFIG = {
-    development: {
-      tenanted: true,
-      adapter: "sqlite3",
-      database: "tmp/storage/primary-%{tenant}.sqlite3",
-      migrations_paths: "test/fixtures/migrations",
-    }
-  }
-
-  SECONDARY_TENANTED_CONFIG = {
-    development: {
-      primary: {
-        adapter: "sqlite3",
-        database: "tmp/storage/primary.sqlite3",
-        migrations_paths: "test/fixtures/migrations",
-      },
-      secondary: {
-        tenanted: true,
-        adapter: "sqlite3",
-        database: "tmp/storage/%{tenant_hash4}/secondary-%{tenant}.sqlite3",
-        migrations_paths: "test/fixtures/migrations",
-      }
-    }
-  }
-
-  def setup
-    super
-    FileUtils.rm_rf("tmp")
-  end
-
-  def teardown
-    FileUtils.rm_rf("tmp")
-    ActiveRecord::Base.connection_handler = ActiveRecord::ConnectionAdapters::ConnectionHandler.new
-    super
-  end
-
-
   test "primary: config handler creates a template config" do
-    config = with_stubbed_configurations(PRIMARY_TENANTED_CONFIG) do
+    config = with_stubbed_configurations(dbconfig(:primary_tenanted)) do
       ActiveRecord::Base.configurations.configs_for(include_hidden: true)
     end
 
@@ -62,7 +25,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
 
     result = nil
     assert_output(/migrating.*create_table/m, nil) do
-      with_stubbed_configurations(PRIMARY_TENANTED_CONFIG) do
+      with_stubbed_configurations(dbconfig(:primary_tenanted)) do
         ActiveRecord::Base.connected_to(shard: "foo") do
           result = [Note.create(content: "asdf"), Note.count]
         end
@@ -78,7 +41,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
 
     result = nil
     assert_silent do # no migration, we load the schema instead
-      with_stubbed_configurations(PRIMARY_TENANTED_CONFIG) do
+      with_stubbed_configurations(dbconfig(:primary_tenanted)) do
         ActiveRecord::Base.connected_to(shard: "bar") do
           result = [Note.create(content: "qwer"), Note.count]
         end
@@ -108,7 +71,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     post_pool = nil
 
     assert_output(/migrating.*create_table/m, nil) do
-      with_stubbed_configurations(PRIMARY_TENANTED_CONFIG) do
+      with_stubbed_configurations(dbconfig(:primary_tenanted)) do
         ActiveRecord::Base.connected_to(shard: "foo") do
           note_pool = Note.connection_pool
           post_pool = Post.connection_pool
@@ -125,7 +88,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
   end
 
   test "secondary: config handler creates a template config" do
-    config = with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
+    config = with_stubbed_configurations(dbconfig(:secondary_tenanted)) do
       ActiveRecord::Base.configurations.configs_for(include_hidden: true)
     end
 
@@ -152,7 +115,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
 
     result = nil
     assert_output(/migrating.*create_table/m, nil) do
-      with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
+      with_stubbed_configurations(dbconfig(:secondary_tenanted)) do
         SecondaryRecord.connected_to(shard: "foo") do
           result = [Note.create(content: "asdf"), Note.count]
         end
@@ -177,7 +140,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
 
     result = nil
     assert_silent do # no migration, we load the schema instead
-      with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
+      with_stubbed_configurations(dbconfig(:secondary_tenanted)) do
         SecondaryRecord.connected_to(shard: "bar") do
           result = [Note.create(content: "qwer"), Note.count]
         end
@@ -215,7 +178,7 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     song_pool = nil
 
     assert_output(/migrating.*create_table/m, nil) do
-      with_stubbed_configurations(SECONDARY_TENANTED_CONFIG) do
+      with_stubbed_configurations(dbconfig(:secondary_tenanted)) do
         SecondaryRecord.connected_to(shard: "foo") do
           note_pool = Note.connection_pool
           post_pool = Post.connection_pool
@@ -238,14 +201,4 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
       puts "Error during test cleanup: #{e}"
     end
   end
-
-  private
-    def with_stubbed_configurations(configurations = config)
-      old_configurations = ActiveRecord::Base.configurations
-      ActiveRecord::Base.configurations = configurations
-
-      yield
-    ensure
-      ActiveRecord::Base.configurations = old_configurations
-    end
 end
