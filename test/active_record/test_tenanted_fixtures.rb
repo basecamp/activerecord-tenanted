@@ -5,8 +5,8 @@ require "test_helper"
 class ActiveRecord::TestTenantedFixtures < ActiveRecord::Tenanted::TestCase
   setup do
     @klass = Class.new do
+      include(ActiveRecord::TestFixtures)
     end
-    @klass.include(ActiveRecord::TestFixtures)
   end
 
   # I know this is a private method, but it's the easiest place to test right now.
