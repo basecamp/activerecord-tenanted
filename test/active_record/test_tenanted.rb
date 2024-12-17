@@ -9,7 +9,10 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     end
 
     assert_pattern do
-      config => [ActiveRecord::Tenanted::DatabaseConfigurations::TemplateConfig]
+      config => [
+        ActiveRecord::Tenanted::DatabaseConfigurations::TemplateConfig,
+        ActiveRecord::DatabaseConfigurations::HashConfig
+      ]
     end
   end
 
@@ -198,6 +201,39 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
       Object.send(:remove_const, :SecondaryRecord)
       Object.send(:remove_const, :ApplicationRecord)
     rescue => e
+      puts "Error during test cleanup: #{e}"
+    end
+  end
+
+  test "connection pools are pruned" do
+    config = dbconfig(:primary_tenanted)
+    config[:development][:primary][:tenant_pool] = 2
+
+    Object.const_set :ApplicationRecord, Class.new(ActiveRecord::Base)
+    ApplicationRecord.primary_abstract_class
+    ApplicationRecord.tenanted
+
+    Object.const_set :Note, Class.new(ApplicationRecord)
+
+    with_stubbed_configurations(config) do
+      capture_io do
+        # create three connection pools
+        3.times do |j|
+          ActiveRecord::Base.connected_to(shard: "foo#{j}") do
+            Note.count
+          end
+        end
+      end
+
+      pools = ApplicationRecord.connection_handler.connection_pool_list
+      assert_equal 3, pools.size
+    end
+  ensure
+    begin
+      ActiveRecord.application_record_class = nil
+      Object.send(:remove_const, :Note)
+      Object.send(:remove_const, :ApplicationRecord)
+    rescue StandardError => e
       puts "Error during test cleanup: #{e}"
     end
   end

@@ -12,10 +12,17 @@ class ActiveRecord::Tenanted::TestCase < ActiveSupport::TestCase
   DBCONFIG_FIXTURES = {
     primary_tenanted: {
       development: {
-        tenanted: true,
-        adapter: "sqlite3",
-        database: "tmp/storage/primary-%{tenant}.sqlite3",
-        migrations_paths: "test/fixtures/migrations",
+        primary: {
+          tenanted: true,
+          adapter: "sqlite3",
+          database: "tmp/storage/primary-%{tenant}.sqlite3",
+          migrations_paths: "test/fixtures/migrations",
+        },
+        secondary: {
+          adapter: "sqlite3",
+          database: "tmp/storage/secondary.sqlite3",
+          migrations_paths: "test/fixtures/migrations",
+        }
       }
     },
 
@@ -48,7 +55,8 @@ class ActiveRecord::Tenanted::TestCase < ActiveSupport::TestCase
   end
 
   def dbconfig(name)
-    DBCONFIG_FIXTURES.fetch(name)
+    # round-trip through YAML so we get a deep copy
+    YAML.load(DBCONFIG_FIXTURES.fetch(name).to_yaml)
   end
 
   private
