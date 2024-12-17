@@ -4,6 +4,7 @@ require "active_record/tasks/database_tasks"
 
 require_relative "tenanted/version"
 require_relative "tenanted/database_configurations"
+require_relative "tenanted/tenant"
 require_relative "tenanted/tenant_selector"
 require_relative "tenanted/patches"
 
