@@ -98,6 +98,31 @@ module ActiveRecord
   end
 end
 
+#
+#  Install the `.tenanted` method on ActiveRecord::Base
+#
 ActiveSupport.on_load(:active_record) do
   extend ActiveRecord::Tenanted::Stub
+end
+
+#
+#  Active Record concerns
+#
+ActiveSupport.on_load(:active_storage_record) do
+  tenanted_with "ApplicationRecord"
+end
+
+ActiveSupport.on_load(:active_support_test_case) do
+  parallelize_setup do |worker|
+    Tenant.connecting_to("#{Rails.env}-tenant-#{worker}")
+  end
+end
+
+#
+#  Action Dispatch concerns
+#
+ActiveSupport.on_load(:action_dispatch_integration_test) do
+  setup do
+    integration_session.host = "#{Tenant.current}.example.com"
+  end
 end
