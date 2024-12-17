@@ -102,6 +102,7 @@ PATH
   specs:
     active_record-tenanted (0.1.0)
       activerecord (>= 8.1.0.alpha)
+      rack-contrib (>= 2.5.0)
       railties (>= 8.1.0.alpha)
 
 GEM
@@ -165,6 +166,8 @@ GEM
       stringio
     racc (1.8.1)
     rack (3.1.8)
+    rack-contrib (2.5.0)
+      rack (< 4)
     rack-session (2.0.0)
       rack (>= 3.0.0)
     rack-test (2.1.0)

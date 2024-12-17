@@ -33,4 +33,5 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "railties", ">= 8.1.0.alpha"
   spec.add_dependency "activerecord", ">= 8.1.0.alpha"
+  spec.add_dependency "rack-contrib", ">= 2.5.0"
 end
