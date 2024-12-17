@@ -10,6 +10,10 @@ require_relative "tenanted/patches"
 
 module ActiveRecord
   module Tenanted
+    class NoCurrentTenantError < StandardError; end
+
+    PROTOSHARD = :__protoshard__
+
     # mixed into ActiveRecord::Base when the gem is loaded
     module Stub
       def initialize(...)
@@ -40,6 +44,8 @@ module ActiveRecord
       end
 
       def connection_pool
+        raise NoCurrentTenantError if current_shard == PROTOSHARD && current_role != ActiveRecord.reading_role
+
         pool = connection_handler.retrieve_connection_pool(connection_specification_name, role: current_role, shard: current_shard, strict: false)
 
         if pool.nil?

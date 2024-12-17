@@ -87,6 +87,29 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     Object.send(:remove_const, :ApplicationRecord)
   end
 
+  test "primary: while_untenanted" do
+    Object.const_set :ApplicationRecord, Class.new(ActiveRecord::Base)
+    ApplicationRecord.primary_abstract_class
+    ApplicationRecord.tenanted
+    Object.const_set :Note, Class.new(ApplicationRecord)
+
+    with_stubbed_configurations(dbconfig(:primary_tenanted)) do
+      ApplicationRecord.connected_to(shard: "foo") do
+        assert_equal("foo", ApplicationRecord.current_shard)
+        assert_equal(:writing, ApplicationRecord.current_role)
+
+        ApplicationRecord.connected_to(role: :untenanted) do
+          assert_raises(ActiveRecord::Tenanted::NoCurrentTenantError) do
+            Note.count
+          end
+        end
+      end
+    end
+  ensure
+    Object.send(:remove_const, :Note)
+    Object.send(:remove_const, :ApplicationRecord)
+  end
+
   test "secondary: config handler creates a template config" do
     config = with_stubbed_configurations(dbconfig(:secondary_tenanted)) do
       ActiveRecord::Base.configurations.configs_for(include_hidden: true)

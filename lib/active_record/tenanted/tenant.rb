@@ -5,11 +5,21 @@ module ActiveRecord
 
       class_methods do
         def connecting_to(tenant_name)
-          ApplicationRecord.connecting_to(shard: tenant_name)
+          ApplicationRecord.connecting_to(shard: tenant_name, role: ActiveRecord.writing_role)
         end
 
         def connected_to(tenant_name, &block)
-          ApplicationRecord.connected_to(shard: tenant_name, &block)
+          ApplicationRecord.connected_to(shard: tenant_name, role: ActiveRecord.writing_role) do
+            ApplicationRecord.prohibit_shard_swapping(true, &block)
+          end
+        end
+
+        def while_untenanted(&block)
+          ApplicationRecord.connected_to(shard: PROTOSHARD, role: ActiveRecord.reading_role, &block)
+        end
+
+        def untenanted?
+          ApplicationRecord.current_shard == PROTOSHARD
         end
 
         def current
