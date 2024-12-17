@@ -9,6 +9,18 @@ module ActiveRecord
         def database_tasks?
           false
         end
+
+        def database_path_for(tenant_name)
+          tenant_hash = Digest::MD5.hexdigest(tenant_name.to_s).chars.each_slice(2).take(4).map(&:join)
+          format_specifiers = {
+            tenant: tenant_name,
+            tenant_hash1: tenant_hash[0], # 255
+            tenant_hash2: File.join(tenant_hash[0..1]), # x 255 = 64 thousand
+            tenant_hash3: File.join(tenant_hash[0..2]), # x 255 = 16 million
+            tenant_hash4: File.join(tenant_hash[0..3])  # x 255 = 4.2 billion
+          }
+          database % format_specifiers
+        end
       end
 
       class TenantConfig < TemplateConfig

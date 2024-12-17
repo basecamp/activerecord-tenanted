@@ -58,17 +58,8 @@ module ActiveRecord
         tenant_shard = current_shard
         tenant_name = "#{tenanted_config_name}_#{tenant_shard}"
 
-        tenant_hash = Digest::MD5.hexdigest(tenant_shard.to_s).chars.each_slice(2).take(4).map(&:join)
-        format_specifiers = {
-          tenant: tenant_shard,
-          tenant_hash1: tenant_hash[0], # 255
-          tenant_hash2: File.join(tenant_hash[0..1]), # x 255 = 64 thousand
-          tenant_hash3: File.join(tenant_hash[0..2]), # x 255 = 16 million
-          tenant_hash4: File.join(tenant_hash[0..3])  # x 255 = 4.2 billion
-        }
-
         config_hash = base_config.configuration_hash.dup
-        config_hash[:database] = config_hash[:database] % format_specifiers
+        config_hash[:database] = base_config.database_path_for(tenant_shard)
         config_hash[:tenanted_config_name] = tenanted_config_name
         config_hash[:tenant] = current_shard
         config = Tenanted::DatabaseConfigurations::TenantConfig.new(base_config.env_name, tenant_name, config_hash)
