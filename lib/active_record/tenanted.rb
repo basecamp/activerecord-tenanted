@@ -11,6 +11,7 @@ require_relative "tenanted/patches"
 module ActiveRecord
   module Tenanted
     class NoCurrentTenantError < StandardError; end
+    class TenantAlreadyExistsError < StandardError; end
 
     PROTOSHARD = :__protoshard__
 

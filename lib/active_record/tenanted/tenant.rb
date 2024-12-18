@@ -30,6 +30,21 @@ module ActiveRecord
           File.exist?(config.database_path_for(tenant_name))
         end
 
+        def create!(tenant_name)
+          raise TenantAlreadyExistsError if exist?(tenant_name)
+          connected_to(tenant_name) do
+            ApplicationRecord.connection_pool
+            yield if block_given?
+          end
+        end
+
+        def destroy(tenant_name)
+          return unless exist?(tenant_name)
+          ActiveRecord::Base.lease_connection.send(:log, "/* destroying tenant database */", "DESTROY [tenant=#{tenant_name}]") do
+            FileUtils.rm(config.database_path_for(tenant_name))
+          end
+        end
+
         def extract_slug(request)
           request.subdomain
         end
