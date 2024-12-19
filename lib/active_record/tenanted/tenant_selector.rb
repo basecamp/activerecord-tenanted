@@ -11,18 +11,18 @@ module ActiveRecord
 
       def call(env)
         request = ActionDispatch::Request.new(env)
-        slug = ::Tenant.extract_slug(request)
+        tenant_name = ::Tenant.requested_tenant(request)
 
-        if slug.blank?
+        if tenant_name.blank?
           ::Tenant.while_untenanted do
             @app.call(env)
           end
-        elsif ::Tenant.exist?(slug)
-          ::Tenant.connected_to(slug) do
+        elsif ::Tenant.exist?(tenant_name)
+          ::Tenant.while_tenanted(tenant_name) do
             @app.call(env)
           end
         else
-          Rails.logger.info("ActiveRecord::Tenanted::TenantSelector: Tenant not found for slug #{slug.inspect}")
+          Rails.logger.info("ActiveRecord::Tenanted::TenantSelector: Tenant not found: #{tenant_name.inspect}")
           Rack::NotFound.new("public/404.html").call(env)
         end
       end

@@ -29,7 +29,7 @@ end
 
 ActiveSupport.on_load(:active_support_test_case) do
   parallelize_setup do |worker|
-    Tenant.connecting_to("#{Rails.env}-tenant-#{worker}")
+    ::Tenant.current = "#{Rails.env}-tenant-#{worker}"
   end
 end
 
@@ -40,5 +40,5 @@ ActiveSupport.on_load(:action_dispatch_integration_test) do
 end
 
 ActiveSupport.on_load(:after_initialize) do
-  ::Tenant.connecting_to("#{Rails.env}-tenant") if Rails.env.local?
+  ::Tenant.current = "#{Rails.env}-tenant" if Rails.env.local?
 end

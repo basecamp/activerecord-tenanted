@@ -6,11 +6,15 @@ module ActiveRecord
       extend ActiveSupport::Concern
 
       class_methods do
-        def connecting_to(tenant_name)
+        def current=(tenant_name)
           ApplicationRecord.connecting_to(shard: tenant_name, role: ActiveRecord.writing_role)
         end
 
-        def connected_to(tenant_name, &block)
+        def current
+          ApplicationRecord.current_shard
+        end
+
+        def while_tenanted(tenant_name, &block)
           ApplicationRecord.connected_to(shard: tenant_name, role: ActiveRecord.writing_role) do
             ApplicationRecord.prohibit_shard_swapping(true, &block)
           end
@@ -24,17 +28,13 @@ module ActiveRecord
           ApplicationRecord.current_shard == PROTOSHARD
         end
 
-        def current
-          ApplicationRecord.current_shard
-        end
-
         def exist?(tenant_name)
           File.exist?(config.database_path_for(tenant_name))
         end
 
         def create!(tenant_name)
           raise TenantAlreadyExistsError if exist?(tenant_name)
-          connected_to(tenant_name) do
+          while_tenanted(tenant_name) do
             ApplicationRecord.connection_pool
             yield if block_given?
           end
@@ -43,15 +43,16 @@ module ActiveRecord
         def destroy(tenant_name)
           return unless exist?(tenant_name)
 
-          ApplicationRecord.connected_to(shard: tenant_name, role: ActiveRecord.writing_role) do
+          while_tenanted(tenant_name) do
             ApplicationRecord.lease_connection.log("/* destroying tenant database */", "DESTROY [tenant=#{tenant_name}]")
+          ensure
             ApplicationRecord.remove_connection
           end
 
           FileUtils.rm(config.database_path_for(tenant_name))
         end
 
-        def extract_slug(request)
+        def requested_tenant(request)
           request.subdomain
         end
 
