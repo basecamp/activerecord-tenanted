@@ -26,8 +26,11 @@ Gem::Specification.new do |spec|
     LICENSE.txt
     lib/active_record/tenanted.rb
     lib/active_record/tenanted/version.rb
+    lib/active_record/tenanted/railtie.rb
+    lib/active_record/tenanted/tenant_selector.rb
     lib/active_record/tenanted/database_configurations.rb
     lib/active_record/tenanted/patches.rb
+    lib/active_record/tenanted/tenant.rb
   ]
   spec.require_paths = ["lib"]
 

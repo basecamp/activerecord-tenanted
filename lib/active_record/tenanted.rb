@@ -3,6 +3,7 @@
 require "active_record/tasks/database_tasks"
 
 require_relative "tenanted/version"
+require_relative "tenanted/railtie"
 require_relative "tenanted/database_configurations"
 require_relative "tenanted/tenant"
 require_relative "tenanted/tenant_selector"
@@ -102,34 +103,5 @@ module ActiveRecord
         tenanted_with_class.connection_pool
       end
     end
-  end
-end
-
-#
-#  Install the `.tenanted` method on ActiveRecord::Base
-#
-ActiveSupport.on_load(:active_record) do
-  extend ActiveRecord::Tenanted::Stub
-end
-
-#
-#  Active Record concerns
-#
-ActiveSupport.on_load(:active_storage_record) do
-  tenanted_with "ApplicationRecord"
-end
-
-ActiveSupport.on_load(:active_support_test_case) do
-  parallelize_setup do |worker|
-    Tenant.connecting_to("#{Rails.env}-tenant-#{worker}")
-  end
-end
-
-#
-#  Action Dispatch concerns
-#
-ActiveSupport.on_load(:action_dispatch_integration_test) do
-  setup do
-    integration_session.host = "#{Tenant.current}.example.com"
   end
 end
