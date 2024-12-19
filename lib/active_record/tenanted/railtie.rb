@@ -33,6 +33,11 @@ ActiveSupport.on_load(:action_text_record) do
   tenanted_with "ApplicationRecord"
 end
 
+ActiveSupport.on_load(:action_mailbox_record) do
+  # ActionText::Record needs to share a connection with ApplicationRecord
+  tenanted_with "ApplicationRecord"
+end
+
 ActiveSupport.on_load(:active_support_test_case) do
   parallelize_setup do |worker|
     ::Tenant.current = "#{Rails.env}-tenant-#{worker}"
