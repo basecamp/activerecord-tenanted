@@ -21,9 +21,13 @@ module ActiveRecord
           }
           database % format_specifiers
         end
+
+        def new_connection
+          raise ConfigurationError, "Tenant template config cannot be used to create a connection. If you have a model that inherits directly from ActiveRecord::Base, make sure to use 'tenanted_with'."
+        end
       end
 
-      class TenantConfig < TemplateConfig
+      class TenantConfig < ActiveRecord::DatabaseConfigurations::HashConfig
         def tenant
           configuration_hash.fetch(:tenant)
         end
