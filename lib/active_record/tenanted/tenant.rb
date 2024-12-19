@@ -40,9 +40,13 @@ module ActiveRecord
 
         def destroy(tenant_name)
           return unless exist?(tenant_name)
-          ActiveRecord::Base.lease_connection.send(:log, "/* destroying tenant database */", "DESTROY [tenant=#{tenant_name}]") do
-            FileUtils.rm(config.database_path_for(tenant_name))
+
+          ApplicationRecord.connected_to(shard: tenant_name, role: ActiveRecord.writing_role) do
+            ApplicationRecord.lease_connection.log("/* destroying tenant database */", "DESTROY [tenant=#{tenant_name}]")
+            ApplicationRecord.remove_connection
           end
+
+          FileUtils.rm(config.database_path_for(tenant_name))
         end
 
         def extract_slug(request)
