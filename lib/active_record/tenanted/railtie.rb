@@ -24,6 +24,7 @@ ActiveSupport.on_load(:active_record) do
 end
 
 ActiveSupport.on_load(:active_storage_record) do
+  # ActiveStorage::Record needs to share a connection with ApplicationRecord
   tenanted_with "ApplicationRecord"
 end
 

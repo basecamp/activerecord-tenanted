@@ -23,7 +23,7 @@ module ActiveRecord
       end
 
       def tenanted_with(class_name)
-        extend Subletter
+        extend Sublet
 
         @tenanted_with_class_name = class_name
       end
@@ -84,7 +84,7 @@ module ActiveRecord
       end
     end
 
-    module Subletter
+    module Sublet
       def tenanted_with_class
         @tenanted_with_class ||= @tenanted_with_class_name&.constantize || superclass.tenanted_with_class
       end

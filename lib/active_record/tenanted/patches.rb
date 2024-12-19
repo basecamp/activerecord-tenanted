@@ -40,22 +40,24 @@ module ActiveRecord
           end
       end
 
-      # TODO: upstream this to prevent the tenanted template config from creating transactional
-      # fixtures on an unnecessary database, which would result in sporadic locking errors.
-      # see https://github.com/rails/rails/pull/53139 for the introduction of this method.
       module TestFixtures
+        # TODO: upstream this to prevent the tenanted template config from creating transactional
+        # fixtures on an unnecessary database, which would result in sporadic locking errors.  see
+        # https://github.com/rails/rails/pull/53139 for the introduction of this method.
         def transactional_tests_for_pool?(pool)
           return false if pool.db_config.instance_of?(ActiveRecord::Tenanted::DatabaseConfigurations::TemplateConfig)
           super
         end
 
+        # TODO: upstream this as a bug fix, which I think can be reproduced without tenanting if you
+        # have a read-only shard without a writing shard.
         def setup_shared_connection_pool
           handler = ActiveRecord::Base.connection_handler
 
           handler.connection_pool_names.each do |name|
             pool_manager = handler.send(:connection_name_to_pool_manager)[name]
             pool_manager.shard_names.each do |shard_name|
-              # ☞ this is the line that changed! the "next unless" is new.
+              # ↓ this is the line that changed! the "next unless" is new.
               next unless writing_pool_config = pool_manager.get_pool_config(ActiveRecord.writing_role, shard_name)
               @saved_pool_configs[name][shard_name] ||= {}
               pool_manager.role_names.each do |role|
