@@ -16,6 +16,11 @@ end
 
 ActiveSupport.on_load(:active_record) do
   extend ActiveRecord::Tenanted::Stub
+
+  ActiveRecord::DatabaseConfigurations.register_db_config_handler do |env_name, name, _, config|
+    next unless config.fetch(:tenanted, false)
+    ActiveRecord::Tenanted::DatabaseConfigurations::TemplateConfig.new(env_name, name, config)
+  end
 end
 
 ActiveSupport.on_load(:active_storage_record) do
