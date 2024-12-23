@@ -23,7 +23,7 @@ module ActiveRecord
         end
 
         def new_connection
-          raise ConfigurationError, "Tenant template config cannot be used to create a connection. If you have a model that inherits directly from ActiveRecord::Base, make sure to use 'tenanted_with'."
+          raise NoCurrentTenantError, "Cannot use an untenanted ActiveRecord::Base connection. If you have a model that inherits directly from ActiveRecord::Base, make sure to use 'tenanted_with'. In development, you may see this error if constant reloading is not being done properly."
         end
       end
 
