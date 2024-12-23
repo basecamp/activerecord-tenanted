@@ -34,7 +34,7 @@ ActiveSupport.on_load(:action_text_record) do
 end
 
 ActiveSupport.on_load(:action_mailbox_record) do
-  # ActionText::Record needs to share a connection with ApplicationRecord
+  # ActionMailbox::Record needs to share a connection with ApplicationRecord
   tenanted_with "ApplicationRecord"
 end
 

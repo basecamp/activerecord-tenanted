@@ -12,7 +12,7 @@ module ActiveRecord
         super
 
         @tenanted_config_name = nil
-        @tenanted_with_class_name = nil
+        @tenanted_with_class = nil
       end
 
       def tenanted(config_name = "primary")
@@ -25,7 +25,7 @@ module ActiveRecord
       def tenanted_with(class_name)
         extend Sublet
 
-        @tenanted_with_class_name = class_name
+        @tenanted_with_class = class_name
       end
     end
 
@@ -86,7 +86,7 @@ module ActiveRecord
 
     module Sublet
       def tenanted_with_class
-        @tenanted_with_class ||= @tenanted_with_class_name&.constantize || superclass.tenanted_with_class
+        @tenanted_with_class&.constantize || superclass.tenanted_with_class
       end
 
       def connection_pool
