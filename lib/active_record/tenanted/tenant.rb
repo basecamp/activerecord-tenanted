@@ -32,8 +32,9 @@ module ActiveRecord
           File.exist?(config.database_path_for(tenant_name))
         end
 
-        def create!(tenant_name)
+        def create(tenant_name)
           raise TenantAlreadyExistsError if exist?(tenant_name)
+
           while_tenanted(tenant_name) do
             ApplicationRecord.connection_pool
             yield if block_given?
