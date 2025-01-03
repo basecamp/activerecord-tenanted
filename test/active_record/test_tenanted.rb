@@ -53,10 +53,14 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_equal 1, result.last
     assert_includes log.string, "[tenant=bar]"
   ensure
-    ActiveRecord.application_record_class = nil
-    ActiveRecord::Base.logger = logger_was
-    Object.send(:remove_const, :Note)
-    Object.send(:remove_const, :ApplicationRecord)
+    begin
+      ActiveRecord.application_record_class = nil
+      ActiveRecord::Base.logger = logger_was
+      Object.send(:remove_const, :ApplicationRecord)
+      Object.send(:remove_const, :Note)
+    rescue => e
+      puts "Error during test cleanup: #{e}"
+    end
   end
 
   test "primary: shared connection pool" do
@@ -82,9 +86,13 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_not_nil note_pool
     assert_same note_pool, post_pool
   ensure
-    Object.send(:remove_const, :Note)
-    Object.send(:remove_const, :Post)
-    Object.send(:remove_const, :ApplicationRecord)
+    begin
+      Object.send(:remove_const, :ApplicationRecord)
+      Object.send(:remove_const, :Post)
+      Object.send(:remove_const, :Note)
+    rescue => e
+      puts "Error during test cleanup: #{e}"
+    end
   end
 
   # # TODO: gotta test this if we keep the method around
@@ -113,8 +121,12 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
   #     end
   #   end
   # ensure
-  #   Object.send(:remove_const, :Note)
-  #   Object.send(:remove_const, :ApplicationRecord)
+  #   begin
+  #     Object.send(:remove_const, :ApplicationRecord)
+  #     Object.send(:remove_const, :Note)
+  #   rescue => e
+  #     puts "Error during test cleanup: #{e}"
+  #   end
   # end
 
   test "secondary: config handler creates a template config" do
@@ -182,11 +194,15 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_equal 1, result.last
     assert_includes log.string, "[tenant=bar]"
   ensure
-    ActiveRecord.application_record_class = nil
-    ActiveRecord::Base.logger = logger_was
-    Object.send(:remove_const, :Note)
-    Object.send(:remove_const, :SecondaryRecord)
-    Object.send(:remove_const, :ApplicationRecord)
+    begin
+      ActiveRecord.application_record_class = nil
+      ActiveRecord::Base.logger = logger_was
+      Object.send(:remove_const, :ApplicationRecord)
+      Object.send(:remove_const, :SecondaryRecord)
+      Object.send(:remove_const, :Note)
+    rescue => e
+      puts "Error during test cleanup: #{e}"
+    end
   end
 
   test "secondary: shared connection pool" do
@@ -222,11 +238,11 @@ class ActiveRecord::TestTenanted < ActiveRecord::Tenanted::TestCase
     assert_same note_pool, song_pool
   ensure
     begin
-      Object.send(:remove_const, :Note)
-      Object.send(:remove_const, :Post)
-      Object.send(:remove_const, :Song)
-      Object.send(:remove_const, :SecondaryRecord)
       Object.send(:remove_const, :ApplicationRecord)
+      Object.send(:remove_const, :SecondaryRecord)
+      Object.send(:remove_const, :Song)
+      Object.send(:remove_const, :Post)
+      Object.send(:remove_const, :Note)
     rescue => e
       puts "Error during test cleanup: #{e}"
     end
