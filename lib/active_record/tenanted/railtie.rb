@@ -31,18 +31,18 @@ module ActiveRecord
       initializer "active_record-tenanted.test_framework" do
         ActiveSupport.on_load(:active_support_test_case) do
           parallelize_setup do |worker|
-            ::Tenant.current = "#{Rails.env}-tenant-#{worker}"
+            ActiveRecord::Tenanted::Tenant.current = "#{Rails.env}-tenant-#{worker}"
           end
         end
 
         ActiveSupport.on_load(:action_dispatch_integration_test) do
           setup do
-            integration_session.host = "#{::Tenant.current}.example.com"
+            integration_session.host = "#{ActiveRecord::Tenanted::Tenant.current}.example.com"
           end
         end
 
         ActiveSupport.on_load(:after_initialize) do
-          ::Tenant.current = "#{Rails.env}-tenant" if Rails.env.local?
+          ActiveRecord::Tenanted::Tenant.current = "#{Rails.env}-tenant" if Rails.env.local?
         end
       end
     end

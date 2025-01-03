@@ -11,14 +11,14 @@ module ActiveRecord
 
       def call(env)
         request = ActionDispatch::Request.new(env)
-        tenant_name = ::Tenant.requested_tenant(request)
+        tenant_name = ActiveRecord::Tenanted::Tenant.requested_tenant(request)
 
         if tenant_name.blank?
-          ::Tenant.while_untenanted do
+          ActiveRecord::Tenanted::Tenant.while_untenanted do
             @app.call(env)
           end
-        elsif ::Tenant.exist?(tenant_name)
-          ::Tenant.while_tenanted(tenant_name) do
+        elsif ActiveRecord::Tenanted::Tenant.exist?(tenant_name)
+          ActiveRecord::Tenanted::Tenant.while_tenanted(tenant_name) do
             @app.call(env)
           end
         else
