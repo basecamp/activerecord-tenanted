@@ -27,6 +27,14 @@ module ActiveRecord
 
         @tenanted_with_class = class_name
       end
+
+      def table_exists?
+        super
+      rescue NoCurrentTenantError
+        # needed because eager loading during startup may try to load the schema (for the schema
+        # cache) before the tenant is set.
+        false
+      end
     end
 
     # mixed into an Active Record class when `tenanted` is called
