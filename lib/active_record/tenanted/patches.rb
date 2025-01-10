@@ -74,13 +74,3 @@ module ActiveRecord
     end
   end
 end
-
-ActiveSupport.on_load(:active_record) do
-  require "rails/generators/active_record/migration.rb"
-  ActiveRecord::Generators::Migration.prepend(ActiveRecord::Tenanted::Patches::Migration)
-  ActiveRecord::Tasks::DatabaseTasks.prepend(ActiveRecord::Tenanted::Patches::DatabaseTasks)
-end
-
-ActiveSupport.on_load(:active_record_fixtures) do
-  include(ActiveRecord::Tenanted::Patches::TestFixtures)
-end
