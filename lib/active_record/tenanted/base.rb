@@ -28,6 +28,10 @@ module ActiveRecord
         @tenanted_with_class = class_name
       end
 
+      def tenanted?
+        false
+      end
+
       def table_exists?
         super
       rescue NoCurrentTenantError
@@ -39,6 +43,10 @@ module ActiveRecord
 
     # mixed into an Active Record class when `tenanted` is called
     module Base
+      def tenanted?
+        tenanted_config_name.present?
+      end
+
       def tenanted_config_name
         @tenanted_config_name ||= (superclass.respond_to?(:tenanted_config_name) ? superclass.tenanted_config_name : nil)
       end
@@ -93,6 +101,10 @@ module ActiveRecord
     end
 
     module Sublet
+      def tenanted?
+        tenanted_with_class.present?
+      end
+
       def tenanted_with_class
         @tenanted_with_class&.constantize || superclass.tenanted_with_class
       end
