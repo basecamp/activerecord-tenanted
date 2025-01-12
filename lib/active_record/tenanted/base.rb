@@ -49,6 +49,18 @@ module ActiveRecord
     module Base
       extend ActiveSupport::Concern
 
+      included do
+        # TODO: need to implement and test this on Sublet, too
+        # TODO: need to figure out if current_shard is right? it's probably not.
+        def to_global_id(options = {})
+          super(options.merge(tenant: self.class.current_shard))
+        end
+
+        def to_signed_global_id(options = {})
+          super(options.merge(tenant: self.class.current_shard))
+        end
+      end
+
       class_methods do
         def tenanted?
           tenanted_config_name.present?
