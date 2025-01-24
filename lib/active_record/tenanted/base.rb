@@ -51,13 +51,12 @@ module ActiveRecord
 
       included do
         # TODO: need to implement and test this on Sublet, too
-        # TODO: need to figure out if current_shard is right? it's probably not.
         def to_global_id(options = {})
-          super(options.merge(tenant: self.class.current_shard))
+          super(options.merge(tenant: ActiveRecord::Tenanted::Tenant.current))
         end
 
         def to_signed_global_id(options = {})
-          super(options.merge(tenant: self.class.current_shard))
+          super(options.merge(tenant: ActiveRecord::Tenanted::Tenant.current))
         end
       end
 
