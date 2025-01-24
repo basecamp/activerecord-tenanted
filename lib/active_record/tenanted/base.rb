@@ -40,6 +40,7 @@ module ActiveRecord
         rescue NoCurrentTenantError
           # needed because eager loading during startup may try to load the schema (for the schema
           # cache) before the tenant is set.
+          puts "WARN: no table exists for #{self} because no tenant is set"
           false
         end
       end
