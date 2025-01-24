@@ -58,6 +58,11 @@ module ActiveRecord
         def to_signed_global_id(options = {})
           super(options.merge(tenant: ActiveRecord::Tenanted::Tenant.current))
         end
+
+        # TODO: need to implement and test this on Sublet, too
+        def cache_key
+          [ActiveRecord::Tenanted::Tenant.current, super].compact.join("/").tap { pp ["MIKE: cache_key", _1] }
+        end
       end
 
       class_methods do
