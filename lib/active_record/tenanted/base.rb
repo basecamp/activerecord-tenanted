@@ -62,7 +62,7 @@ module ActiveRecord
 
         # TODO: need to implement and test this on Sublet, too
         def cache_key
-          [ActiveRecord::Tenanted::Tenant.current, super].compact.join("/").tap { pp ["MIKE: cache_key", _1] }
+          "#{super}?tenant=#{ActiveRecord::Tenanted::Tenant.current}"
         end
       end
 
