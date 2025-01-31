@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class ActiveRecord::TenantedTest < ActiveSupport::TestCase
+describe ActiveRecord::Tenanted do
   test "it has a version number" do
     assert ActiveRecord::Tenanted::VERSION
   end
