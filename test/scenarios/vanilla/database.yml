@@ -1,0 +1,10 @@
+test:
+  isolated:
+    tenanted: true
+    adapter: "sqlite3"
+    database: "%{storage}/test/isolated/%%{tenant}/main.sqlite3"
+    migrations_paths: "%{__dir__}/%{scenario}/isolated_migrations"
+  shared:
+    adapter: "sqlite3"
+    database: "%{storage}/test/shared/%%{tenant}/main.sqlite3"
+    migrations_paths: "%{__dir__}/%{scenario}/shared_migrations"

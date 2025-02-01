@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
-require "active_record/tenanted/version"
-require "active_record/tenanted/railtie"
+require_relative "tenanted/version"
 
 module ActiveRecord
   module Tenanted
-    # Your code goes here...
   end
 end
+
+require_relative "tenanted/database_configurations"
+
+require_relative "tenanted/railtie"

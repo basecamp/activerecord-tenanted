@@ -50,6 +50,7 @@ Documentation:
 
 TODO:
 - implement `AR::Tenanted::DatabaseConfigurations::RootConfig` (name?)
+  - [x] create the specialized RootConfig for `tenanted: true` databases
   - [ ] `#database_path_for(tenant_name)`
   - [ ] `#tenants` returns all the tenants on disk (for iteration)
 
@@ -110,6 +111,10 @@ TODO:
   - [ ] look into whether the proposed Reaper changes will allow us to set appropriate connection min/max/timeouts
     - and if not, figure out how to prune unused/timed-out connections
   - [ ] we should also look into how to cap the number of connection pools, and prune them
+
+- autoloading and configuration hooks
+  - [ ] create a zeitwerk loader
+  - [ ] install some load hooks (where?)
 
 
 ### Tenanting in your application

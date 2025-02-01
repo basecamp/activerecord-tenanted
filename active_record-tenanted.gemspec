@@ -26,5 +26,6 @@ Gem::Specification.new do |spec|
     Dir["{app,config,db,lib}/**/*", "MIT-LICENSE", "Rakefile", "README.md"]
   end
 
+  spec.add_dependency "railties", ">= 8.1.alpha"
   spec.add_dependency "activerecord", ">= 8.1.alpha"
 end
