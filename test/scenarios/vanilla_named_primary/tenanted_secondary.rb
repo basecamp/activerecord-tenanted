@@ -3,7 +3,7 @@
 class TenantedApplicationRecord < ActiveRecord::Base
   self.abstract_class = true
 
-  tenanted
+  tenanted "tenanted"
 end
 
 class User < TenantedApplicationRecord

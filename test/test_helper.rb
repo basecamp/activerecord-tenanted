@@ -36,7 +36,7 @@ module ActiveRecord
 
             setup do
               db_config_yml = sprintf(File.read(db_config_path),
-                                      __dir__: __dir__, storage: storage_dir, scenario: scenario_name)
+                                      __dir__: __dir__, storage: storage_dir)
               db_config = YAML.load(db_config_yml)
 
               @old_configurations = ActiveRecord::Base.configurations
@@ -95,11 +95,11 @@ module ActiveRecord
         end
       end
 
-      def dummy_model_names
+      private def dummy_model_names
         %w[TenantedApplicationRecord SharedApplicationRecord User Announcement]
       end
 
-      def clear_dummy_models
+      private def clear_dummy_models
         ActiveRecord.application_record_class = nil
         dummy_model_names.each do |model_name|
           Object.send(:remove_const, model_name) if Object.const_defined?(model_name)

@@ -1,0 +1,13 @@
+#
+#  this test config has a primary database named "tenanted"
+#
+test:
+  tenanted:
+    tenanted: true
+    adapter: "sqlite3"
+    database: "%{storage}/test/tenanted/%%{tenant}/main.sqlite3"
+    migrations_paths: "%{__dir__}/tenanted_migrations"
+  shared:
+    adapter: "sqlite3"
+    database: "%{storage}/test/shared.sqlite3"
+    migrations_paths: "%{__dir__}/shared_migrations"

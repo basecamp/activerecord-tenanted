@@ -14,7 +14,7 @@ describe ActiveRecord::Tenanted::Base do
       end
     end
 
-    with_scenario(:vanilla, :tenanted_primary_by_name) do
+    with_scenario(:vanilla_named_primary, :tenanted_primary) do
       test "it sets database configuration name" do
         assert_equal("tenanted", TenantedApplicationRecord.tenanted_config_name)
       end
