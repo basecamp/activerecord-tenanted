@@ -17,3 +17,5 @@ module ActiveRecord
 end
 
 loader.eager_load
+
+ActiveSupport.run_load_hooks :active_record_tenanted, ActiveRecord::Tenanted
