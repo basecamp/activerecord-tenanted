@@ -8,6 +8,9 @@ require "rails/test_help" # should be before active_record is loaded to avoid sc
 
 require_relative "../lib/active_record/tenanted"
 
+# turn off the Rails integrations
+ActiveRecord::Tenanted.connection_class = nil
+
 require_relative "dummy/config/environment"
 require "minitest/spec"
 

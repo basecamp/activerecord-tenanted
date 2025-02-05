@@ -48,6 +48,7 @@ Documentation outline:
 - demonstrate how to configure an app for subdomain tenants
   - app.config.hosts
   - example TenantSelector proc
+- explain Tenanted options "connection_class" and "tenanted_rails_records"
 
 TODO:
 
@@ -117,7 +118,8 @@ TODO:
   - [ ] install a variation on the default database.yml with primary tenanted and non-primary "global" untenanted
   - initializer
     - [ ] install `TenantSelector` and configure it with a proc
-    - [ ] commented line like `Tenant = ActiveRecord::Tenanted::Tenant`
+    - [ ] commented line like `self.connection_class = "ApplicationRecord"`
+    - [ ] commented line like `self.tenanted_rails_records = true`
 
 - pruning connections and connection pools
   - [ ] look into whether the proposed Reaper changes will allow us to set appropriate connection min/max/timeouts
@@ -125,14 +127,8 @@ TODO:
   - [ ] we should also look into how to cap the number of connection pools, and prune them
 
 - autoloading and configuration hooks
-  - [ ] create a zeitwerk loader
-  - [ ] install some load hooks (where?)
-
-- design thinking re: global singleton (I think I've decided to not have one in this iteration)
-  - should there be a global singleton `Tenant`? I'm not sure we need it or the limitations of a global.
-  - if we do, though, then `.tenanted` should set `Tenant.base_class=`
-  - and we need to add checks that `.tenanted` is called only ONCE in the application
-  - `.tenanted_class` returns nil or the abstract base class. do we need this? let's wait and see.
+  - [x] create a zeitwerk loader
+  - [x] install a load hook
 
 - test coverage
   - [x] need more complete coverage on `Tenant.ensure_schema_migrations`
@@ -142,8 +138,9 @@ TODO:
 
 Documentation outline:
 
-- introduce the `Tenant` module
+- introduce the `ActiveRecord::Tenanted::Tenant` module
   - demonstrate how to create a tenant, destroy a tenant, etc.
+  - explain `.while_tenanted` and `current_tenant`
 - troubleshooting: what errors you might see in your app and how to deal with it
   - specifically when running untenanted
 
@@ -159,8 +156,8 @@ Documentation outline:
 TODO:
 
 - testing
-  - [ ] set up test helper to default to a tenanted named "test-tenant"
-  - [ ] set up test helpers to deal with parallelized tests, too (e.g. "test-tenant-19")
+  - [x] set up test helper to default to a tenanted named "test-tenant"
+  - [x] set up test helpers to deal with parallelized tests, too (e.g. "test-tenant-19")
   - [ ] allow the creation of tenants within transactional tests if we can?
     - either by cleaning up properly (hard)
     - or by providing a test helper that does `ensure ... Tenant.destroy`
