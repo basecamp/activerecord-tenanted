@@ -14,6 +14,6 @@ group :rubocop do
   gem "rubocop-minitest", "0.36.0", require: false
   gem "rubocop-packaging", "0.5.2", require: false
   gem "rubocop-performance", "1.23.1", require: false
-  gem "rubocop-rails", "2.29.1", require: false
+  gem "rubocop-rails", "2.30.1", require: false
   gem "rubocop-rake", "0.6.0", require: false
 end
