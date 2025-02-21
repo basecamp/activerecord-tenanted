@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/rails/rails.git
-  revision: 972a52d127ae90915fe68a6802c3213e28d80d45
+  revision: 976e5180a00de26db65b08ac1fd7ab6b679cef9f
   branch: main
   specs:
     actioncable (8.1.0.alpha)
@@ -242,15 +242,15 @@ GEM
       rubocop (>= 1.72.1)
     ruby-progressbar (1.13.0)
     securerandom (0.4.1)
-    sqlite3 (2.5.0-aarch64-linux-gnu)
-    sqlite3 (2.5.0-aarch64-linux-musl)
-    sqlite3 (2.5.0-arm-linux-gnu)
-    sqlite3 (2.5.0-arm-linux-musl)
-    sqlite3 (2.5.0-arm64-darwin)
-    sqlite3 (2.5.0-x86_64-darwin)
-    sqlite3 (2.5.0-x86_64-linux-gnu)
-    sqlite3 (2.5.0-x86_64-linux-musl)
-    stringio (3.1.3)
+    sqlite3 (2.6.0-aarch64-linux-gnu)
+    sqlite3 (2.6.0-aarch64-linux-musl)
+    sqlite3 (2.6.0-arm-linux-gnu)
+    sqlite3 (2.6.0-arm-linux-musl)
+    sqlite3 (2.6.0-arm64-darwin)
+    sqlite3 (2.6.0-x86_64-darwin)
+    sqlite3 (2.6.0-x86_64-linux-gnu)
+    sqlite3 (2.6.0-x86_64-linux-musl)
+    stringio (3.1.5)
     thor (1.3.2)
     timeout (0.4.3)
     tzinfo (2.0.6)
@@ -285,7 +285,7 @@ DEPENDENCIES
   rubocop-performance (= 1.24.0)
   rubocop-rails (= 2.30.1)
   rubocop-rake (= 0.7.1)
-  sqlite3 (= 2.5.0)
+  sqlite3 (= 2.6.0)
 
 BUNDLED WITH
    2.6.2
