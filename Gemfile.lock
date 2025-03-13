@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/rails/rails.git
-  revision: 3eb5f34ec33d0d20b23050f451ed18611996aced
+  revision: f575fca24a72cf0631c59ed797c575392fbbc527
   branch: main
   specs:
     actioncable (8.1.0.alpha)
@@ -146,7 +146,7 @@ GEM
       net-smtp
     marcel (1.0.4)
     mini_mime (1.1.5)
-    minitest (5.25.4)
+    minitest (5.25.5)
     minitest-parallel_fork (2.0.0)
       minitest (>= 5.15.0)
     net-imap (0.5.6)
@@ -186,7 +186,7 @@ GEM
       date
       stringio
     racc (1.8.1)
-    rack (3.1.10)
+    rack (3.1.12)
     rack-contrib (2.5.0)
       rack (< 4)
     rack-session (2.1.0)
