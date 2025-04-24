@@ -194,7 +194,7 @@ module ActiveRecord
       end
 
       rake_tasks do
-        load File.expand_path(File.join(__dir__, "../../tasks/active_record/tenanted_tasks.rake"))
+        load File.expand_path(File.join(__dir__, "tasks/databases.rake"))
       end
     end
   end
