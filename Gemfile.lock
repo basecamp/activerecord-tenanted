@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/rails/rails.git
-  revision: 0ac3fba6ee5f7d1680024a4925eee6069095487b
+  revision: 4a38e9136dbf0d7f947403be5dd06f8638bf1769
   branch: main
   specs:
     actioncable (8.1.0.alpha)
@@ -256,7 +256,7 @@ GEM
     rubocop-ast (1.44.1)
       parser (>= 3.3.7.2)
       prism (~> 1.4)
-    rubocop-minitest (0.38.0)
+    rubocop-minitest (0.38.1)
       lint_roller (~> 1.1)
       rubocop (>= 1.75.0, < 2.0)
       rubocop-ast (>= 1.38.0, < 2.0)
@@ -353,7 +353,7 @@ DEPENDENCIES
   propshaft
   puma (>= 5.0)
   rails!
-  rubocop-minitest (= 0.38.0)
+  rubocop-minitest (= 0.38.1)
   rubocop-packaging (= 0.6.0)
   rubocop-performance (= 1.25.0)
   rubocop-rails (= 2.32.0)
