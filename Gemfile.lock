@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/rails/rails.git
-  revision: cfc9b90f70d64a83b0aadec72bd858b197e2d733
+  revision: 9a21e6c3b92eab108c85e2bc9f47ad19a40ad88a
   branch: main
   specs:
     actioncable (8.1.0.alpha)
@@ -238,7 +238,7 @@ GEM
     rdoc (6.14.2)
       erb
       psych (>= 4.0.0)
-    regexp_parser (2.11.1)
+    regexp_parser (2.11.2)
     reline (0.6.2)
       io-console (~> 0.5)
     rexml (3.4.1)
@@ -267,7 +267,7 @@ GEM
       lint_roller (~> 1.1)
       rubocop (>= 1.75.0, < 2.0)
       rubocop-ast (>= 1.38.0, < 2.0)
-    rubocop-rails (2.32.0)
+    rubocop-rails (2.33.3)
       activesupport (>= 4.2.0)
       lint_roller (~> 1.1)
       rack (>= 1.1)
@@ -301,10 +301,10 @@ GEM
       fugit (~> 1.11.0)
       railties (>= 7.1)
       thor (>= 1.3.1)
-    sqlite3 (2.7.1-arm64-darwin)
-    sqlite3 (2.7.1-x86_64-darwin)
-    sqlite3 (2.7.1-x86_64-linux-gnu)
-    sqlite3 (2.7.1-x86_64-linux-musl)
+    sqlite3 (2.7.3-arm64-darwin)
+    sqlite3 (2.7.3-x86_64-darwin)
+    sqlite3 (2.7.3-x86_64-linux-gnu)
+    sqlite3 (2.7.3-x86_64-linux-musl)
     stimulus-rails (1.3.4)
       railties (>= 6.0.0)
     stringio (3.1.7)
@@ -323,7 +323,7 @@ GEM
       railties (>= 7.1.0)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
-    unicode-display_width (3.1.4)
+    unicode-display_width (3.1.5)
       unicode-emoji (~> 4.0, >= 4.0.4)
     unicode-emoji (4.0.4)
     uri (1.0.3)
@@ -357,13 +357,13 @@ DEPENDENCIES
   rubocop-minitest (= 0.38.1)
   rubocop-packaging (= 0.6.0)
   rubocop-performance (= 1.25.0)
-  rubocop-rails (= 2.32.0)
+  rubocop-rails (= 2.33.3)
   rubocop-rake (= 0.7.1)
   selenium-webdriver
   solid_cable
   solid_cache
   solid_queue
-  sqlite3 (= 2.7.1)
+  sqlite3 (= 2.7.3)
   stimulus-rails
   tailwindcss-rails
   turbo-rails
