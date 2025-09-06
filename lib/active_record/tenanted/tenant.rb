@@ -16,6 +16,10 @@ module ActiveRecord
         tenant ? "#{super}?tenant=#{tenant}" : super
       end
 
+      def inspect
+        tenant ? super.sub(/>$/, " tenant=#{tenant}>") : super
+      end
+
       def to_global_id(options = {})
         super(options.merge(tenant: tenant))
       end
