@@ -1,5 +1,11 @@
 # `activerecord-tenanted` Changelog
 
+## Unreleased
+
+### Changed
+
+- Format changed for `cache_key` from `users/1?tenant=foo` to `foo/users/1` using `ActiveSupport::Cache.expand_cache_key` #187 @miguelmarcondesf
+
 ## v0.4.1 / 2025-09-17
 
 No functional changes from v0.4.0.

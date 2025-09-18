@@ -1166,10 +1166,17 @@ describe ActiveRecord::Tenanted::Tenant do
             User.create!(email: "user1@example.org")
           end
 
-          assert_equal("users/1?tenant=foo", user.cache_key)
+          assert_equal("foo/users/1", user.cache_key)
 
           TenantedApplicationRecord.with_tenant("foo") do
-            assert_equal("users/1?tenant=foo", User.find(user.id).cache_key)
+            assert_equal("foo/users/1", User.find(user.id).cache_key)
+          end
+        end
+
+        test "handles special characters in tenant names" do
+          TenantedApplicationRecord.create_tenant("foo-bar_123") do
+            user = User.create!(email: "user1@example.org")
+            assert_equal("foo-bar_123/users/1", user.cache_key)
           end
         end
       end

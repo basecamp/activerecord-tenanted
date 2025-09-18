@@ -13,7 +13,11 @@ module ActiveRecord
       end
 
       def cache_key
-        tenant ? "#{super}?tenant=#{tenant}" : super
+        if tenant.present?
+          ActiveSupport::Cache.expand_cache_key(super, tenant)
+        else
+          super
+        end
       end
 
       def inspect
