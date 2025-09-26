@@ -101,10 +101,8 @@ module ActiveRecord
         end
 
         def tenant_exist?(tenant_name)
-          # this will have to be an adapter-specific implementation if we support other than sqlite
-          database_path = tenanted_root_config.database_path_for(tenant_name)
-
-          File.exist?(database_path) && !ActiveRecord::Tenanted::Mutex::Ready.locked?(database_path)
+          db_config = tenanted_root_config.new_tenant_config(tenant_name)
+          ActiveRecord::Tenanted::DatabaseAdapter.database_exists?(db_config)
         end
 
         def with_tenant(tenant_name, prohibit_shard_swapping: true, &block)
@@ -123,14 +121,12 @@ module ActiveRecord
 
         def create_tenant(tenant_name, if_not_exists: false, &block)
           created_db = false
-          database_path = tenanted_root_config.database_path_for(tenant_name)
+          db_config = tenanted_root_config.new_tenant_config(tenant_name)
 
-          ActiveRecord::Tenanted::Mutex::Ready.lock(database_path) do
-            unless File.exist?(database_path)
-              # NOTE: This is obviously a sqlite-specific implementation.
-              # TODO: Add a `create_database` method upstream in the sqlite3 adapter, and call it.
-              #       Then this would delegate to the adapter and become adapter-agnostic.
-              FileUtils.touch(database_path)
+          ActiveRecord::Tenanted::DatabaseAdapter.acquire_lock(db_config, "create_#{tenant_name}") do
+            unless ActiveRecord::Tenanted::DatabaseAdapter.database_exists?(db_config)
+
+              ActiveRecord::Tenanted::DatabaseAdapter.create_database(db_config)
 
               with_tenant(tenant_name) do
                 connection_pool(schema_version_check: false)
@@ -140,7 +136,7 @@ module ActiveRecord
               created_db = true
             end
           rescue
-            FileUtils.rm_f(database_path)
+            ActiveRecord::Tenanted::DatabaseAdapter.drop_database(db_config)
             raise
           end
 
@@ -160,10 +156,8 @@ module ActiveRecord
             end
           end
 
-          # NOTE: This is obviously a sqlite-specific implementation.
-          # TODO: Create a `drop_database` method upstream in the sqlite3 adapter, and call it.
-          #       Then this would delegate to the adapter and become adapter-agnostic.
-          FileUtils.rm_f(tenanted_root_config.database_path_for(tenant_name))
+          db_config = tenanted_root_config.new_tenant_config(tenant_name)
+          ActiveRecord::Tenanted::DatabaseAdapter.drop_database(db_config)
         end
 
         def tenants
@@ -213,12 +207,12 @@ module ActiveRecord
           return superclass._create_tenanted_pool unless connection_class?
 
           tenant = current_tenant
-          unless File.exist?(tenanted_root_config.database_path_for(tenant))
-            raise TenantDoesNotExistError, "The database file for tenant #{tenant.inspect} does not exist."
-          end
+          db_config = tenanted_root_config.new_tenant_config(tenant)
 
-          config = tenanted_root_config.new_tenant_config(tenant)
-          pool = establish_connection(config)
+          unless ActiveRecord::Tenanted::DatabaseAdapter.database_exists?(db_config)
+            raise TenantDoesNotExistError, "The database for tenant #{tenant.inspect} does not exist."
+          end
+          pool = establish_connection(db_config)
 
           if schema_version_check
             pending_migrations = pool.migration_context.open.pending_migrations

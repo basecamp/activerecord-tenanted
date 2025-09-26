@@ -4,6 +4,9 @@ require "active_record"
 
 require "zeitwerk"
 loader = Zeitwerk::Loader.for_gem_extension(ActiveRecord)
+loader.inflector.inflect(
+  "sqlite" => "SQLite",
+)
 loader.setup
 
 module ActiveRecord
