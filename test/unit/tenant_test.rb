@@ -581,6 +581,69 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "cross-tenant associations" do
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_one :announcement
+        Announcement.belongs_to :user
+      end
+
+      test "has_one automatically scopes by tenant_id" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Foo announcement", tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_nil user.announcement
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcement
+          assert_equal "Foo announcement", user.announcement.message
+        end
+      end
+    end
+  end
+
+  describe "cross-tenant associations with scope" do
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_one :announcement, -> { where(message: "Special announcement") }
+        Announcement.belongs_to :user
+      end
+
+      test "has_one automatically scopes by tenant_id and scope" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Special announcement", tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_nil user.announcement
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcement
+          assert_equal "Special announcement", user.announcement.message
+        end
+      end
+    end
+  end
 
   describe ".without_tenant" do
     for_each_scenario do
