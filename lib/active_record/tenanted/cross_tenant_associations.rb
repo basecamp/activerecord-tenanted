@@ -16,16 +16,25 @@ module ActiveRecord
         end
 
         def has_one(name, scope = nil, **options)
-          config = get_cross_tenant_config
-          tenant_column = config[:tenant_column] || :tenant_id
-          custom_options = options.merge(tenant_column: tenant_column)
+          define_enhanced_association(:has_one, name, scope, **options)
+        end
 
-          enhanced_scope = enhance_cross_tenant_association(name, scope, custom_options, :has_one)
-          super(name, enhanced_scope, **options)
+        def has_many(name, scope = nil, **options)
+          define_enhanced_association(:has_many, name, scope, **options)
         end
 
         private
-          def enhance_cross_tenant_association(name, scope, options, association_type)
+          # For now association methods are identical
+          def define_enhanced_association(association_type, name, scope, **options)
+            config = get_cross_tenant_config
+            tenant_column = config[:tenant_column] || :tenant_id
+            custom_options = options.merge(tenant_column: tenant_column)
+
+            enhanced_scope = enhance_cross_tenant_association(name, scope, custom_options)
+            method(association_type).super_method.call(name, enhanced_scope, **options)
+          end
+
+          def enhance_cross_tenant_association(name, scope, options)
             target_class = options[:class_name]&.constantize || name.to_s.classify.constantize
 
             unless target_class.tenanted?
