@@ -645,6 +645,39 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "cross-tenant associations with custom tenant column and class name" do
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :custom_tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.cross_tenant_config(tenant_column: :custom_tenant_id)
+        User.has_one :announcement, class_name: "Announcement"
+        Announcement.belongs_to :user
+      end
+
+      test "has_one automatically scopes by custom tenant id and class name" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Special announcement", custom_tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_nil user.announcement
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcement
+          assert_equal "Special announcement", user.announcement.message
+        end
+      end
+    end
+  end
+
   describe ".without_tenant" do
     for_each_scenario do
       setup do
