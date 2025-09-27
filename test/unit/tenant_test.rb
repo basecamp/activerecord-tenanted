@@ -611,6 +611,41 @@ describe ActiveRecord::Tenanted::Tenant do
         end
       end
     end
+
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_many :announcements
+        Announcement.belongs_to :user
+      end
+
+      test "has_many automatically scopes by tenant_id" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Foo announcement", tenant_id: "foo", user: user)
+          Announcement.create!(message: "Another Foo announcement", tenant_id: "foo", user: user)
+          Announcement.create!(message: "Yet another Foo announcement", tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_equal 0, user.announcements.count
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcements
+          assert_equal 3, user.announcements.count
+          assert_equal "Foo announcement", user.announcements.first.message
+          assert_equal "Another Foo announcement", user.announcements.second.message
+          assert_equal "Yet another Foo announcement", user.announcements.third.message
+        end
+      end
+    end
   end
 
   describe "cross-tenant associations with scope" do
@@ -640,6 +675,39 @@ describe ActiveRecord::Tenanted::Tenant do
 
           assert_not_nil user.announcement
           assert_equal "Special announcement", user.announcement.message
+        end
+      end
+    end
+
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_many :announcements, -> { where(message: "Special announcement") }
+        Announcement.belongs_to :user
+      end
+
+      test "has_many automatically scopes by tenant_id and scope" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Special announcement", tenant_id: "foo", user: user)
+          Announcement.create!(message: "Another announcement", tenant_id: "foo", user: user)
+          Announcement.create!(message: "Yet another announcement", tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_equal 0, user.announcements.count
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcements
+          assert_equal 1, user.announcements.count
+          assert_equal "Special announcement", user.announcements.first.message
         end
       end
     end
@@ -673,6 +741,42 @@ describe ActiveRecord::Tenanted::Tenant do
 
           assert_not_nil user.announcement
           assert_equal "Special announcement", user.announcement.message
+        end
+      end
+    end
+
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :custom_tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.cross_tenant_config(tenant_column: :custom_tenant_id)
+        User.has_many :announcements, class_name: "Announcement"
+        Announcement.belongs_to :user
+      end
+
+      test "has_many automatically scopes by custom tenant id and class name" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Foo announcement", custom_tenant_id: "foo", user: user)
+          Announcement.create!(message: "Another Foo announcement", custom_tenant_id: "foo", user: user)
+          Announcement.create!(message: "Yet another Foo announcement", custom_tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_equal 0, user.announcements.count
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcements
+          assert_equal 3, user.announcements.count
+          assert_equal "Foo announcement", user.announcements.first.message
+          assert_equal "Another Foo announcement", user.announcements.second.message
+          assert_equal "Yet another Foo announcement", user.announcements.third.message
         end
       end
     end
