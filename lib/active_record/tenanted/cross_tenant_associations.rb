@@ -35,12 +35,9 @@ module ActiveRecord
           end
 
           def enhance_cross_tenant_association(name, scope, options)
-            begin
-              target_class = options[:class_name]&.constantize || name.to_s.classify.constantize
-            rescue NameError
-              # Class not yet loaded during Rails initialization, skip enhancement
-              return scope
-            end
+            target_class = options[:class_name]&.safe_constantize || name.to_s.classify.safe_constantize
+
+            return scope unless target_class
 
             unless target_class.tenanted?
               tenant_column = options[:tenant_column]
