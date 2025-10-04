@@ -36,17 +36,9 @@ module ActiveRecord
         end
 
         def tenants
-          glob = database_path_for("*")
-          scanner = Regexp.new(database_path_for("(.+)"))
-
-          Dir.glob(glob).map do |path|
-            result = path.scan(scanner).flatten.first
-            if result.nil?
-              warn "WARN: ActiveRecord::Tenanted: Cannot parse tenant name from filename #{path.inspect}. " \
-                   "This is a bug, please report it to https://github.com/basecamp/activerecord-tenanted/issues"
-            end
-            result
-          end
+          ActiveRecord::Tenanted::DatabaseAdapter.list_tenant_databases(self)
+        rescue
+          []
         end
 
         def new_tenant_config(tenant_name)
@@ -85,9 +77,7 @@ module ActiveRecord
           end
 
           def validate_tenant_name(tenant_name)
-            if tenant_name.match?(%r{[/'"`]})
-              raise BadTenantNameError, "Tenant name contains an invalid character: #{tenant_name.inspect}"
-            end
+            ActiveRecord::Tenanted::DatabaseAdapter.validate_tenant_name(self, tenant_name)
           end
 
           def test_worker_path(path)
