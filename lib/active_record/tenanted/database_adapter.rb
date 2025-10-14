@@ -5,6 +5,7 @@ module ActiveRecord
     class DatabaseAdapter # :nodoc:
       ADAPTERS = {
         "sqlite3" => "ActiveRecord::Tenanted::DatabaseAdapters::SQLite",
+        "beamer" => "Beamer::ConnectionAdapter",
       }.freeze
 
       class << self
