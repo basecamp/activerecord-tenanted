@@ -396,7 +396,11 @@ TODO:
 
 Documentation outline:
 
-  - invalid characters in a tenant name (which is database-dependent)
+- setting the tenant
+  - `.with_tenant` and `.current_tenant=`
+    - and the callbacks for each, `:with_tenant` and `:set_current_tenant`
+  - validation
+    - invalid characters in a tenant name (which is database-dependent)
     - and how the application may want to do additional validation (e.g. ICANN subdomain restrictions)
   - `#tenant` is a readonly attribute on all tenanted model instances
   - `.current_tenant` returns the execution context for the model connection class

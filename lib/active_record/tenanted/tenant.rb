@@ -97,7 +97,9 @@ module ActiveRecord
         def current_tenant=(tenant_name)
           tenant_name = tenant_name.to_s unless tenant_name == UNTENANTED_SENTINEL
 
-          connection_class_for_self.connecting_to(shard: tenant_name, role: ActiveRecord.writing_role)
+          run_callbacks :set_current_tenant do
+            connection_class_for_self.connecting_to(shard: tenant_name, role: ActiveRecord.writing_role)
+          end
         end
 
         def tenant_exist?(tenant_name)
@@ -108,11 +110,13 @@ module ActiveRecord
           tenant_name = tenant_name.to_s unless tenant_name == UNTENANTED_SENTINEL
 
           if tenant_name == current_tenant
-            yield
+            run_callbacks :with_tenant, &block
           else
             connection_class_for_self.connected_to(shard: tenant_name, role: ActiveRecord.writing_role) do
-              prohibit_shard_swapping(prohibit_shard_swapping) do
-                log_tenant_tag(tenant_name, &block)
+              run_callbacks :with_tenant do
+                prohibit_shard_swapping(prohibit_shard_swapping) do
+                  log_tenant_tag(tenant_name, &block)
+                end
               end
             end
           end
@@ -255,9 +259,13 @@ module ActiveRecord
         self.default_shard = ActiveRecord::Tenanted::Tenant::UNTENANTED_SENTINEL
 
         prepend TenantCommon
+        extend ActiveSupport::Callbacks
 
         cattr_accessor :tenanted_config_name
         cattr_accessor(:tenanted_connection_pools) { LRU.new }
+
+        define_callbacks :with_tenant
+        define_callbacks :set_current_tenant
       end
 
       def tenanted?
