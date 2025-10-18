@@ -887,6 +887,22 @@ describe ActiveRecord::Tenanted::Tenant do
           assert_equal "foo", saved_post.reviewer_tenant_id
         end
       end
+
+      test "belongs_to auto-population works when updating existing record" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          user1 = User.create!(email: "author1@foo.example.org")
+          user2 = User.create!(email: "author2@foo.example.org")
+
+          post = Post.create!(title: "Test Post", author: user1)
+          assert_equal "foo", post.author_tenant_id
+
+          post.update!(author: user2)
+
+          assert_equal "foo", post.reload.author_tenant_id
+        end
+      end
     end
   end
 
