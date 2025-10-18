@@ -828,6 +828,65 @@ describe ActiveRecord::Tenanted::Tenant do
           assert_nil post.author_tenant_id
         end
       end
+
+      test "belongs_to updates tenant column when reassigning to different user" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          user1 = User.create!(email: "author1@foo.example.org")
+          user2 = User.create!(email: "author2@foo.example.org")
+
+          post = Post.new(title: "Test Post")
+          post.author = user1
+
+          assert_equal "foo", post.author_tenant_id
+
+          post.author = user2
+
+          assert_equal "foo", post.author_tenant_id
+        end
+      end
+
+      test "belongs_to without tenant_key does not auto-populate" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :some_tenant_column, :string
+
+          Post.belongs_to :editor, class_name: "User", foreign_key: "user_id"
+
+          user = User.create!(email: "editor@foo.example.org")
+          post = Post.new(title: "Test Post", some_tenant_column: nil)
+          post.editor = user
+
+          assert_nil post.some_tenant_column
+        end
+      end
+
+      test "multiple belongs_to associations with different tenant_keys work independently" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+          Post.connection.add_column :posts, :reviewer_tenant_id, :string
+          Post.connection.add_column :posts, :reviewer_id, :integer
+
+          Post.belongs_to :author, class_name: "User", foreign_key: "user_id", tenant_key: :author_tenant_id
+          Post.belongs_to :reviewer, class_name: "User", foreign_key: "reviewer_id", tenant_key: :reviewer_tenant_id
+
+          author = User.create!(email: "author@foo.example.org")
+          reviewer = User.create!(email: "reviewer@foo.example.org")
+
+          post = Post.new(title: "Test Post")
+          post.author = author
+          post.reviewer = reviewer
+
+          assert_equal "foo", post.author_tenant_id
+          assert_equal "foo", post.reviewer_tenant_id
+
+          post.save!
+
+          saved_post = Post.find(post.id)
+          assert_equal "foo", saved_post.author_tenant_id
+          assert_equal "foo", saved_post.reviewer_tenant_id
+        end
+      end
     end
   end
 
