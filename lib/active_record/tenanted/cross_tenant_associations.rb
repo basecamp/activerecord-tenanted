@@ -14,6 +14,21 @@ module ActiveRecord
           define_enhanced_association(:has_many, name, scope, **options)
         end
 
+        def belongs_to(name, scope = nil, **options)
+          tenant_key = options.delete(:tenant_key)
+
+          super(name, scope, **options)
+
+          if tenant_key
+            define_method("#{name}=") do |value|
+              super(value)
+              if value.respond_to?(:tenant)
+                self.send("#{tenant_key}=", value.tenant)
+              end
+            end
+          end
+        end
+
         private
           # For now association methods are identical
           def define_enhanced_association(association_type, name, scope, **options)

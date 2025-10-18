@@ -780,6 +780,57 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "cross-tenant associations with belongs_to" do
+    for_each_scenario do
+      setup do
+        with_migration "20250830152220_create_posts.rb"
+
+        Post.belongs_to :author, class_name: "User", foreign_key: "user_id", tenant_key: :author_tenant_id
+      end
+
+      test "belongs_to automatically populates tenant column when association is set" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          user = User.create!(email: "author@foo.example.org")
+
+          post = Post.new(title: "Test Post")
+          post.author = user
+
+          assert_equal "foo", post.author_tenant_id
+
+          post.save!
+
+          saved_post = Post.find(post.id)
+          assert_equal "foo", saved_post.author_tenant_id
+        end
+      end
+
+      test "belongs_to auto-population works when creating with association in constructor" do
+        TenantedApplicationRecord.create_tenant("bar") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          user = User.create!(email: "author@bar.example.org")
+
+          post = Post.create!(title: "Test Post", author: user)
+
+          assert_equal "bar", post.author_tenant_id
+        end
+      end
+
+      test "belongs_to auto-population handles nil association" do
+        TenantedApplicationRecord.create_tenant("baz") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          post = Post.new(title: "Test Post")
+          post.author = nil
+
+          assert_nil post.author_tenant_id
+        end
+      end
+    end
+  end
+
   describe ".without_tenant" do
     for_each_scenario do
       setup do
