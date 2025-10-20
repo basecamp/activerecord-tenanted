@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/rails/rails.git
-  revision: 1ca947883d1975487e14208e8159726654fc20d1
+  revision: 2c76861864814ec0a95ea13a6e786cab9b2f66cd
   branch: main
   specs:
     actioncable (8.2.0.alpha)
@@ -260,10 +260,10 @@ GEM
     rubocop-packaging (0.6.0)
       lint_roller (~> 1.1.0)
       rubocop (>= 1.72.1, < 2.0)
-    rubocop-performance (1.26.0)
+    rubocop-performance (1.26.1)
       lint_roller (~> 1.1)
       rubocop (>= 1.75.0, < 2.0)
-      rubocop-ast (>= 1.44.0, < 2.0)
+      rubocop-ast (>= 1.47.1, < 2.0)
     rubocop-rails (2.33.4)
       activesupport (>= 4.2.0)
       lint_roller (~> 1.1)
@@ -355,7 +355,7 @@ DEPENDENCIES
   rails!
   rubocop-minitest (= 0.38.2)
   rubocop-packaging (= 0.6.0)
-  rubocop-performance (= 1.26.0)
+  rubocop-performance (= 1.26.1)
   rubocop-rails (= 2.33.4)
   rubocop-rake (= 0.7.1)
   selenium-webdriver
