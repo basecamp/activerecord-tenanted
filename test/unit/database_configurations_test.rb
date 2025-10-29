@@ -222,7 +222,7 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
       end
     end
 
-    with_scenario(:primary_db, :primary_record) do
+    with_scenario("sqlite/primary_db", :primary_record) do
       test "handles non-alphanumeric characters" do
         assert_empty(base_config.tenants)
 
@@ -252,7 +252,7 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
     end
 
     describe "implicit file creation" do
-      with_scenario(:primary_db, :primary_record) do
+      with_scenario("sqlite/primary_db", :primary_record) do
         # This is probably not behavior we want, long-term. See notes about the sqlite3 adapter in
         # tenant.rb. This test is descriptive, not prescriptive.
         test "creates a file if one does not exist" do
