@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    command: sleep infinity
+    volumes:
+      - ..:/workspaces/activerecord-tenanted:cached
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_USERNAME: rails
+      MYSQL_PASSWORD: rails
+      MYSQL_ROOT_PASSWORD: devcontainer
+      MYSQL_DEVELOPMENT_DB: activerecord_tenanted_development
+      MYSQL_TEST_DB: activerecord_tenanted_test
+      MYSQL_INIT_TIMEOUT: "120"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: devcontainer
+      MYSQL_USER: rails
+      MYSQL_PASSWORD: rails
+      MYSQL_DATABASE: activerecord_tenanted_development
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:
