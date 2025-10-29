@@ -14,16 +14,8 @@ module ActiveRecord
           like_pattern = db_config.database.gsub(/%\{tenant\}/, "%")
           scanner = Regexp.new("^" + Regexp.escape(db_config.database).gsub(Regexp.escape("%{tenant}"), "(.+)") + "$")
 
-          server_config = db_config.configuration_hash.dup
-          server_config.delete(:database)
-          temp_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(
-            db_config.env_name,
-            "#{db_config.name}_server",
-            server_config
-          )
-
-          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(temp_config) do |conn|
-            result = conn.execute("SHOW DATABASES LIKE '#{like_pattern}'")
+          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
+            result = connection.execute("SHOW DATABASES LIKE '#{like_pattern}'")
 
             result.filter_map do |row|
               db_name = row[0] || row.first
@@ -73,59 +65,25 @@ module ActiveRecord
         end
 
         def create_database
-          # Create a temporary config without the specific database to connect to MySQL server
-          server_config = db_config.configuration_hash.dup
-          server_config.delete(:database)
-          temp_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(
-            db_config.env_name,
-            "#{db_config.name}_server",
-            server_config
-          )
-          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(temp_config) do |conn|
-            # Use ActiveRecord's built-in create_database method with charset/collation from config
-            create_options = {}
-
-            # Add charset/encoding if specified
-            if charset = db_config.configuration_hash[:encoding] || db_config.configuration_hash[:charset]
-              create_options[:charset] = charset
+          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
+            create_options = Hash.new.tap do |options|
+              options[:charset] = db_config.configuration_hash[:encoding]   if db_config.configuration_hash.include?(:encoding)
+              options[:collation] = db_config.configuration_hash[:collation]  if db_config.configuration_hash.include?(:collation)
             end
 
-            # Add collation if specified
-            if collation = db_config.configuration_hash[:collation]
-              create_options[:collation] = collation
-            end
-
-            conn.create_database(database_path, create_options)
+            connection.create_database(database_path, create_options)
           end
         end
 
         def drop_database
-          # Create a temporary config without the specific database to connect to MySQL server
-          server_config = db_config.configuration_hash.dup
-          server_config.delete(:database)
-          temp_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(
-            db_config.env_name,
-            "#{db_config.name}_server",
-            server_config
-          )
-
-          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(temp_config) do |conn|
-            # Use ActiveRecord's built-in drop_database method
-            conn.drop_database(database_path)
+          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
+            connection.drop_database(database_path)
           end
         end
 
         def database_exist?
-          server_config = db_config.configuration_hash.dup
-          server_config.delete(:database)
-          temp_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(
-            db_config.env_name,
-            "#{db_config.name}_server",
-            server_config
-          )
-
-          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(temp_config) do |conn|
-            result = conn.execute("SHOW DATABASES LIKE '#{database_path}'")
+          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
+            result = connection.execute("SHOW DATABASES LIKE '#{database_path}'")
             result.any?
           end
         rescue ActiveRecord::NoDatabaseError, Mysql2::Error
@@ -149,11 +107,27 @@ module ActiveRecord
         end
 
         def test_workerize(db, test_worker_id)
-          # TODO: Implement
+          test_worker_suffix = "_#{test_worker_id}"
+
+          if db.end_with?(test_worker_suffix)
+            db
+          else
+            db + test_worker_suffix
+          end
         end
 
         def path_for(database)
           database
+        end
+
+      private
+        def configuration_hash_without_database
+          configuration_hash = db_config.configuration_hash.dup.merge(database: nil)
+          ActiveRecord::DatabaseConfigurations::HashConfig.new(
+            db_config.env_name,
+            db_config.name.to_s,
+            configuration_hash
+          )
         end
       end
     end
