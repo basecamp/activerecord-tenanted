@@ -15,6 +15,5 @@
       "version": "latest"
     },
     "ghcr.io/rails/devcontainer/features/mysql-client": {}
-  },
-  "postCreateCommand": ".devcontainer/scripts/post-create.sh"
+  }
 }
