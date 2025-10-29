@@ -36,8 +36,19 @@ module ActiveRecord
           db
         end
 
+        def host_for(tenant_name)
+          return nil unless host&.include?("%{tenant}")
+          sprintf(host, tenant: tenant_name)
+        end
+
         def tenants
-          config_adapter.tenant_databases
+          all_databases = ActiveRecord::Base.configurations.configs_for(env_name: env_name)
+          non_tenant_db_names = all_databases.reject { |c| c.configuration_hash[:tenanted] }.map(&:database).compact
+
+          config_adapter.tenant_databases.reject do |tenant_name|
+            tenant_db_name = database_for(tenant_name)
+            non_tenant_db_names.include?(tenant_db_name)
+          end
         end
 
         def new_tenant_config(tenant_name)
@@ -46,6 +57,9 @@ module ActiveRecord
             hash[:tenant] = tenant_name
             hash[:database] = database_for(tenant_name)
             hash[:tenanted_config_name] = name
+            # Only override host if it contains a tenant template
+            new_host = host_for(tenant_name)
+            hash[:host] = new_host if new_host
           end
           Tenanted::DatabaseConfigurations::TenantConfig.new(env_name, config_name, config_hash)
         end
