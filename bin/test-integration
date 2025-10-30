@@ -20,7 +20,7 @@ require "open3"
 require "active_support"
 require "active_support/core_ext/object" # deep_dup
 
-scenarios = Dir.glob("test/scenarios/*db/*record.rb").map do |path|
+scenarios = Dir.glob("test/scenarios/sqlite/*db/*record.rb").map do |path|
   database, models = path.scan(%r{test/scenarios/(.+db)/(.+record).rb}).flatten
   { database: database, models: models }
 end
