@@ -43,11 +43,11 @@ module ActiveRecord
 
         def tenants
           all_databases = ActiveRecord::Base.configurations.configs_for(env_name: env_name)
-          non_tenant_db_names = all_databases.reject { |c| c.configuration_hash[:tenanted] }.map(&:database).compact
+          untenanted = all_databases.reject { |c| c.configuration_hash[:tenanted] }.filter_map(&:database)
 
           config_adapter.tenant_databases.reject do |tenant_name|
-            tenant_db_name = database_for(tenant_name)
-            non_tenant_db_names.include?(tenant_db_name)
+            database = database_for(tenant_name)
+            untenanted.include?(database)
           end
         end
 

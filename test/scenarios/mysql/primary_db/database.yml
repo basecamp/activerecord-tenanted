@@ -16,6 +16,6 @@ test:
     migrations_paths: "%{db_path}/tenanted_migrations"
   shared:
     <<: *default
-    database: active_record_tenanted-shared
+    database: shared
     migrations_paths: "%{db_path}/shared_migrations"
 

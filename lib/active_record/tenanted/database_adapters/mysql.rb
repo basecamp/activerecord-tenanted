@@ -34,9 +34,7 @@ module ActiveRecord
         end
 
         def validate_tenant_name(tenant_name)
-          tenant_name_str = tenant_name.to_s
-
-          database_name = sprintf(db_config.database, tenant: tenant_name_str)
+          database_name = sprintf(db_config.database, tenant: tenant_name.to_s)
 
           return if database_name.include?("%{") || database_name.include?("%}")
 
@@ -67,8 +65,8 @@ module ActiveRecord
         def create_database
           ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
             create_options = Hash.new.tap do |options|
-              options[:charset] = db_config.configuration_hash[:encoding]   if db_config.configuration_hash.include?(:encoding)
-              options[:collation] = db_config.configuration_hash[:collation]  if db_config.configuration_hash.include?(:collation)
+              options[:charset] = db_config.configuration_hash[:encoding] if db_config.configuration_hash.include?(:encoding)
+              options[:collation] = db_config.configuration_hash[:collation] if db_config.configuration_hash.include?(:collation)
             end
 
             connection.create_database(database_path, create_options)
