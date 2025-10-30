@@ -17,12 +17,13 @@ require "fileutils"
 require "tmpdir"
 require "yaml"
 require "open3"
+require "debug"
 require "active_support"
 require "active_support/core_ext/object" # deep_dup
 
 scenarios = Dir.glob("test/scenarios/sqlite/*db/*record.rb").map do |path|
-  database, models = path.scan(%r{test/scenarios/(.+db)/(.+record).rb}).flatten
-  { database: database, models: models }
+  adapter, database, models = path.scan(%r{test/scenarios/(.+)/(.+db)/(.+record).rb}).flatten
+  { adapter: adapter, database: database, models: models }
 end
 
 COLOR_FG_BLUE = "\e[0;34m"
@@ -53,7 +54,7 @@ def run_scenario(scenario)
   FileUtils.copy_entry(SMARTY_PATH, app_path)
 
   # generate database file
-  database_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:database]}/database.yml")
+  database_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:adapter]}/#{scenario[:database]}/database.yml")
   database_file_contents = sprintf(File.read(database_file), storage: "storage", db_path: "db")
   database_file_hash = YAML.load(database_file_contents)
   database_file_hash["development"] = database_file_hash["test"].deep_dup
@@ -63,14 +64,14 @@ def run_scenario(scenario)
   File.write(File.join(app_path, "config/database.yml"), database_file_hash.to_yaml)
 
   # generate models using ApplicationRecord
-  models_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:database]}/#{scenario[:models]}.rb")
+  models_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:adapter]}/#{scenario[:database]}/#{scenario[:models]}.rb")
   models_file_contents = File.read(models_file)
                            .gsub("TenantedApplicationRecord", "ApplicationRecord")
   File.write(File.join(app_path, "app/models/application_record.rb"), models_file_contents)
 
   # copy migrations from scenario and smarty app
   FileUtils.mkdir_p(File.join(app_path, "db"))
-  FileUtils.cp_r(Dir.glob(File.join(GEM_PATH, "test/scenarios/#{scenario[:database]}/*migrations")),
+  FileUtils.cp_r(Dir.glob(File.join(GEM_PATH, "test/scenarios/#{scenario[:adapter]}/#{scenario[:database]}/*migrations")),
                  File.join(app_path, "db"))
   FileUtils.cp_r(Dir.glob(File.join(app_path, "db/migrate/*rb")),
                  File.join(app_path, "db/tenanted_migrations"))
