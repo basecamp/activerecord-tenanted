@@ -17,11 +17,12 @@ require "fileutils"
 require "tmpdir"
 require "yaml"
 require "open3"
+require "erb"
 require "debug"
 require "active_support"
 require "active_support/core_ext/object" # deep_dup
 
-scenarios = Dir.glob("test/scenarios/sqlite/*db/*record.rb").map do |path|
+scenarios = Dir.glob("test/scenarios/mysql/*db/*record.rb").map do |path|
   adapter, database, models = path.scan(%r{test/scenarios/(.+)/(.+db)/(.+record).rb}).flatten
   { adapter: adapter, database: database, models: models }
 end
@@ -55,8 +56,8 @@ def run_scenario(scenario)
 
   # generate database file
   database_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:adapter]}/#{scenario[:database]}/database.yml")
-  database_file_contents = sprintf(File.read(database_file), storage: "storage", db_path: "db")
-  database_file_hash = YAML.load(database_file_contents)
+  database_file_contents = ERB.new(File.read(database_file)).result
+  database_file_hash = YAML.unsafe_load(database_file_contents)
   database_file_hash["development"] = database_file_hash["test"].deep_dup
   database_file_hash["development"].each_value do |hash|
     hash["database"] = hash["database"].sub("/test/", "/development/")
