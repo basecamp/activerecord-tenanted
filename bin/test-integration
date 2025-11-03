@@ -96,10 +96,7 @@ def run_scenario(scenario)
       File.exist?("db/#{prefix}schema_cache.yml") || abort("Schema cache dump not generated")
 
       # create a fake tenant database to validate that it is deleted in the test suite
-      dev_db = Dir.glob("storage/development/*/development-tenant/main.sqlite3").first
-      test_db = dev_db.gsub("/development/", "/test/").gsub("development-tenant", "delete-me")
-      FileUtils.mkdir_p(File.dirname(test_db))
-      FileUtils.touch(test_db)
+      run_cmd(scenario, %{bin/rails runner "ApplicationRecord.tenanted_root_config.new_tenant_config('delete-me').config_adapter.create_database"}, env: { "RAILS_ENV" => "test" })
 
       # run in parallel half the time
       env = if rand(2).zero?
