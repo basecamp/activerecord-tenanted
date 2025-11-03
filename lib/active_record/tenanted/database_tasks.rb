@@ -92,9 +92,9 @@ module ActiveRecord
           begin
             database_already_initialized = pool.schema_migration.table_exists?
           rescue ActiveRecord::NoDatabaseError
+            database_already_initialized = false
           end
 
-          # initialize_database
           unless database_already_initialized
             schema_dump_path = ActiveRecord::Tasks::DatabaseTasks.schema_dump_path(config)
             if schema_dump_path && File.exist?(schema_dump_path)
@@ -102,17 +102,17 @@ module ActiveRecord
             end
           end
 
-          # migrate
           migrated = false
+
           if pool.migration_context.pending_migration_versions.present?
             pool.migration_context.migrate(nil)
             pool.schema_cache.clear!
             migrated = true
           end
 
-          # dump the schema and schema cache
           if Rails.env.development? || ENV["ARTENANT_SCHEMA_DUMP"].present?
-            if migrated
+            should_dump_schema = migrated || !database_already_initialized
+            if should_dump_schema
               ActiveRecord::Tasks::DatabaseTasks.dump_schema(config)
             end
 
