@@ -12,7 +12,7 @@ test:
   primary:
     <<: *default
     tenanted: true
-    database: active_record_tenanted-%%{tenant}
+    database: primary-%%{tenant}
     migrations_paths: "%{db_path}/tenanted_migrations"
   shared:
     <<: *default
