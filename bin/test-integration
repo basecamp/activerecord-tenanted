@@ -56,7 +56,10 @@ def run_scenario(scenario)
 
   # generate database file
   database_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:adapter]}/#{scenario[:database]}/database.yml")
-  database_file_contents = ERB.new(File.read(database_file)).result
+  erb_content = ERB.new(File.read(database_file)).result
+  storage_path = File.join(app_path, "storage")
+  db_path = File.join(app_path, "db")
+  database_file_contents = sprintf(erb_content, storage: storage_path, db_path: db_path)
   database_file_hash = YAML.unsafe_load(database_file_contents)
   database_file_hash["development"] = database_file_hash["test"].deep_dup
   database_file_hash["development"].each_value do |hash|
