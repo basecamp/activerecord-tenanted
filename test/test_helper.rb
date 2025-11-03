@@ -300,8 +300,6 @@ module ActiveRecord
           shared_configs.each do |config|
             if db_adapter == "mysql"
               ActiveRecord::Tasks::DatabaseTasks.drop(config)
-              ActiveRecord::Tasks::DatabaseTasks.create(config)
-              ActiveRecord::Tasks::DatabaseTasks.migrate(config)
             else
               pool = ActiveRecord::Base.connection_handler.retrieve_connection_pool(
                 config.name,

@@ -30,7 +30,7 @@ end
 COLOR_FG_BLUE = "\e[0;34m"
 COLOR_RESET = "\e[0m"
 
-def run_cmd(scenario, cmd, verbose: false, env: {})
+def run_cmd(scenario, cmd, verbose: true, env: {})
   message = "#{COLOR_FG_BLUE}#{scenario}#{COLOR_RESET} > #{env.presence} #{cmd}"
   print message + (PARALLEL ? "\n" : "")
 
@@ -88,7 +88,8 @@ def run_scenario(scenario)
       run_cmd(scenario, "bundle check || bundle install")
 
       # set up the database and schema files
-      run_cmd(scenario, "bin/rails db:prepare")
+      mysql_env = ENV.select { |k, _| k.start_with?("MYSQL_") }
+      run_cmd(scenario, "bin/rails db:prepare", env: { "ARTENANT_SCHEMA_DUMP" => "1", "VERBOSE" => "true", **mysql_env })
 
       # validate-ish the setup
       prefix = scenario[:database].match?(/\Asecondary/) ? "tenanted_" : ""
@@ -96,7 +97,7 @@ def run_scenario(scenario)
       File.exist?("db/#{prefix}schema_cache.yml") || abort("Schema cache dump not generated")
 
       # create a fake tenant database to validate that it is deleted in the test suite
-      run_cmd(scenario, %{bin/rails runner "ApplicationRecord.tenanted_root_config.new_tenant_config('delete-me').config_adapter.create_database"}, env: { "RAILS_ENV" => "test" })
+      run_cmd(scenario, %{bin/rails runner "ApplicationRecord.tenanted_root_config.new_tenant_config('delete-me').config_adapter.create_database"}, env: { "RAILS_ENV" => "test", **mysql_env })
 
       # run in parallel half the time
       env = if rand(2).zero?
