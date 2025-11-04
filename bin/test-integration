@@ -51,6 +51,9 @@ def run_scenario(scenario)
   at_exit { FileUtils.remove_entry app_path } unless OPT_KEEP_DIR
   puts "Creating integration app for #{COLOR_FG_BLUE}#{scenario}#{COLOR_RESET} at #{app_path}"
 
+  # Generate a unique database prefix for this scenario to avoid conflicts
+  db_prefix = "test_#{scenario[:database]}_#{scenario[:models]}_#{Process.pid}".gsub(/[^a-zA-Z0-9_]/, "_")
+
   # make a copy of the smarty app
   FileUtils.copy_entry(SMARTY_PATH, app_path)
 
@@ -89,6 +92,7 @@ def run_scenario(scenario)
 
       # set up the database and schema files
       mysql_env = ENV.select { |k, _| k.start_with?("MYSQL_") }
+      mysql_env["MYSQL_DB_PREFIX"] = db_prefix
       run_cmd(scenario, "bin/rails db:prepare", env: { "RAILS_ENV" => "test", "ARTENANT_SCHEMA_DUMP" => "1", "VERBOSE" => "true", **mysql_env })
 
       # validate-ish the setup
@@ -101,9 +105,9 @@ def run_scenario(scenario)
 
       # run in parallel half the time
       env = if rand(2).zero?
-        { "PARALLEL_WORKERS" => "2" }
+        { "PARALLEL_WORKERS" => "2", **mysql_env }
       else
-        { "PARALLEL_WORKERS" => "1" }
+        { "PARALLEL_WORKERS" => "1", **mysql_env }
       end
 
       run_cmd(scenario, ["bin/rails test", *TEST_ARGS].join(" "), verbose: true, env:)

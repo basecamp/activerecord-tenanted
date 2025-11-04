@@ -13,10 +13,10 @@ test:
   primary:
     <<: *default
     tenanted: true
-    database: primary-%%{tenant}
+    database: <%= ENV.fetch('MYSQL_DB_PREFIX', 'primary') %>-%%{tenant}
     migrations_paths: "%{db_path}/tenanted_migrations"
   shared:
     <<: *default
-    database: shared
+    database: <%= ENV.fetch('MYSQL_DB_PREFIX', 'primary') %>-shared
     migrations_paths: "%{db_path}/shared_migrations"
 
