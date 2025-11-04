@@ -1,7 +1,8 @@
 default: &default
   adapter: mysql2
   encoding: utf8mb4
-  max_connections: 5
+  pool: 20
+  max_connections: 20
   username: root
   password: devcontainer
   host: <%= ENV.fetch('MYSQL_HOST', 'mysql') %>

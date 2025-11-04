@@ -158,6 +158,10 @@ module ActiveRecord
         end
 
         def destroy_tenant(tenant_name)
+          adapter = tenanted_root_config.new_tenant_config(tenant_name).config_adapter
+
+          return unless adapter.database_exist?
+
           ActiveRecord::Base.logger.info "  DESTROY [tenant=#{tenant_name}] Destroying tenant database"
 
           with_tenant(tenant_name, prohibit_shard_swapping: false) do
@@ -166,7 +170,9 @@ module ActiveRecord
             end
           end
 
-          tenanted_root_config.new_tenant_config(tenant_name).config_adapter.drop_database
+          adapter.drop_database
+        rescue => e
+          Rails.logger.warn "Failed to destroy tenant #{tenant_name}: #{e.message}"
         end
 
         def tenants

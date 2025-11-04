@@ -11,29 +11,42 @@ module ActiveRecord
         end
 
         def tenant_databases
-          like_pattern = db_config.database.gsub(/%\{tenant\}/, "%")
-          scanner = Regexp.new("^" + Regexp.escape(db_config.database).gsub(Regexp.escape("%{tenant}"), "(.+)") + "$")
+          like_pattern = db_config.database_for("%")
+          scanner_pattern = db_config.database_for("(.+)")
+          scanner = Regexp.new("^" + Regexp.escape(scanner_pattern).gsub(Regexp.escape("(.+)"), "(.+)") + "$")
 
-          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
-            result = connection.execute("SHOW DATABASES LIKE '#{like_pattern}'")
+          begin
+            ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
+              result = connection.execute("SHOW DATABASES LIKE '#{like_pattern}'")
 
-            result.filter_map do |row|
-              db_name = row[0] || row.first
-              match = db_name.match(scanner)
-              if match.nil?
-                Rails.logger.warn "ActiveRecord::Tenanted: Cannot parse tenant name from database #{db_name.inspect}"
-                nil
-              else
-                match[1]
+              result.filter_map do |row|
+                db_name = row[0] || row.first
+                match = db_name.match(scanner)
+                if match.nil?
+                  Rails.logger.warn "ActiveRecord::Tenanted: Cannot parse tenant name from database #{db_name.inspect}"
+                  nil
+                else
+                  tenant_name = match[1]
+
+                  # Strip test_worker_id suffix if present
+                  if db_config.test_worker_id
+                    test_worker_suffix = "_#{db_config.test_worker_id}"
+                    tenant_name = tenant_name.delete_suffix(test_worker_suffix)
+                  end
+
+                  tenant_name
+                end
               end
             end
+          rescue ActiveRecord::NoDatabaseError, Mysql2::Error => e
+            Rails.logger.warn "Could not list tenant databases: #{e.message}"
+            []
           end
-        rescue ActiveRecord::NoDatabaseError, Mysql2::Error => e
-          Rails.logger.warn "Could not list tenant databases: #{e.message}"
-          []
         end
 
         def validate_tenant_name(tenant_name)
+          return if tenant_name == "%" || tenant_name == "(.+)"
+
           database_name = sprintf(db_config.database, tenant: tenant_name.to_s)
 
           return if database_name.include?("%{") || database_name.include?("%}")
@@ -75,7 +88,13 @@ module ActiveRecord
 
         def drop_database
           ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
-            connection.drop_database(database_path)
+            connection.execute("DROP DATABASE IF EXISTS #{connection.quote_table_name(database_path)}")
+          end
+        rescue Mysql2::Error => e
+          if e.message.include?("Can't drop database") || e.message.include?("doesn't exist")
+            Rails.logger.debug "Database #{database_path} doesn't exist or already dropped"
+          else
+            raise
           end
         end
 
