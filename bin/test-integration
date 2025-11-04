@@ -22,7 +22,7 @@ require "debug"
 require "active_support"
 require "active_support/core_ext/object" # deep_dup
 
-scenarios = Dir.glob("test/scenarios/mysql/*db/*record.rb").map do |path|
+scenarios = Dir.glob("test/scenarios/*/*db/*record.rb").map do |path|
   adapter, database, models = path.scan(%r{test/scenarios/(.+)/(.+db)/(.+record).rb}).flatten
   { adapter: adapter, database: database, models: models }
 end
