@@ -89,7 +89,7 @@ def run_scenario(scenario)
 
       # set up the database and schema files
       mysql_env = ENV.select { |k, _| k.start_with?("MYSQL_") }
-      run_cmd(scenario, "bin/rails db:prepare", env: { "ARTENANT_SCHEMA_DUMP" => "1", "VERBOSE" => "true", **mysql_env })
+      run_cmd(scenario, "bin/rails db:prepare", env: { "RAILS_ENV" => "test", "ARTENANT_SCHEMA_DUMP" => "1", "VERBOSE" => "true", **mysql_env })
 
       # validate-ish the setup
       prefix = scenario[:database].match?(/\Asecondary/) ? "tenanted_" : ""
