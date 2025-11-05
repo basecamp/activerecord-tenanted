@@ -147,8 +147,8 @@ module ActiveRecord
             end
 
             teardown do
-              cleanup_shared_databases
-              cleanup_tenant_databases
+              drop_shared_databases
+              drop_tentant_databases
               ActiveRecord::Migration.verbose = @migration_verbose_was
               ActiveRecord::Base.configurations = @old_configurations
               ActiveRecord::Tasks::DatabaseTasks.db_dir = @old_db_dir
@@ -281,7 +281,18 @@ module ActiveRecord
       end
 
       private
-        def cleanup_tenant_databases
+        def drop_shared_databases
+          shared_configs = all_configs.reject { |c| c.configuration_hash[:tenanted] || c.database.blank? }
+          return if shared_configs.empty?
+
+          shared_configs.each do |config|
+            ActiveRecord::Tasks::DatabaseTasks.drop(config)
+          rescue => e
+            Rails.logger.warn "Failed to cleanup shared database #{config.name}: #{e.message}"
+          end
+        end
+
+        def drop_tentant_databases
           base_config = all_configs.find { |c| c.configuration_hash[:tenanted] }
           tenants = base_config.tenants
           return if tenants.empty?
@@ -294,16 +305,6 @@ module ActiveRecord
           end
         end
 
-        def cleanup_shared_databases
-          shared_configs = all_configs.reject { |c| c.configuration_hash[:tenanted] || c.database.blank? }
-          return if shared_configs.empty?
-
-          shared_configs.each do |config|
-            ActiveRecord::Tasks::DatabaseTasks.drop(config)
-          rescue => e
-            Rails.logger.warn "Failed to cleanup shared database #{config.name}: #{e.message}"
-          end
-        end
 
         def create_fake_record
           # emulate models like ActiveStorage::Record that inherit directly from AR::Base
