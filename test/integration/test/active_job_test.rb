@@ -26,7 +26,7 @@ class NoteCheerioJobTest < ActiveJob::TestCase
   end
 
   test "global id locator catches wrong tenant context" do
-    tenant = "global_id_locator_catches_wrong_tenant"
+    tenant = __method__
     note = ApplicationRecord.create_tenant(tenant) do
       Note.create!(title: "asdf", body: "Lorem ipsum.")
     end
@@ -40,7 +40,7 @@ class NoteCheerioJobTest < ActiveJob::TestCase
   end
 
   test "global id locator catches untenanted context" do
-    tenant = "global_id_locator_catches_untenanted_context"
+    tenant = __method__
     note = ApplicationRecord.create_tenant(tenant) do
       Note.create!(title: "asdf", body: "Lorem ipsum.")
     end
