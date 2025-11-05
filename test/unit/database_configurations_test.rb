@@ -219,6 +219,21 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
 
           assert_equal([ "bar" ], base_config.tenants)
         end
+
+        test "only returns tenants from tenanted databases, not shared databases" do
+          assert_empty(base_config.tenants)
+
+          TenantedApplicationRecord.create_tenant("foo")
+
+          assert_equal([ "foo" ], base_config.tenants)
+
+          all_databases = ActiveRecord::Base.configurations.configs_for(env_name: base_config.env_name)
+
+          untenanted_config = all_databases.reject { |c| c.configuration_hash[:tenanted] }
+          untenanted_config.each do |shared_config|
+            assert_not_includes(base_config.tenants, shared_config.database)
+          end
+        end
       end
     end
 
