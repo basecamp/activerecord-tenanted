@@ -52,7 +52,6 @@ module ActiveRecord
             hash[:tenant] = tenant_name
             hash[:database] = database_for(tenant_name)
             hash[:tenanted_config_name] = name
-            # Only override host if it contains a tenant template
             new_host = host_for(tenant_name)
             hash[:host] = new_host if new_host
           end
@@ -72,6 +71,7 @@ module ActiveRecord
 
         private
           def host_for(tenant_name)
+            # Only override host if it contains a tenant template
             return nil unless host&.include?("%{tenant}")
             sprintf(host, tenant: tenant_name)
           end
