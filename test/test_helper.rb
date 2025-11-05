@@ -283,9 +283,9 @@ module ActiveRecord
       private
         def cleanup_tenant_databases
           base_config = all_configs.find { |c| c.configuration_hash[:tenanted] }
-          return unless base_config
-
           tenants = base_config.tenants
+          return if tenants.empty?
+
           tenants.each do |tenant_name|
             adapter = base_config.new_tenant_config(tenant_name).config_adapter
             adapter.drop_database
@@ -296,24 +296,10 @@ module ActiveRecord
 
         def cleanup_shared_databases
           shared_configs = all_configs.reject { |c| c.configuration_hash[:tenanted] || c.database.blank? }
-          shared_configs.each do |config|
-            if db_adapter == "mysql"
-              ActiveRecord::Tasks::DatabaseTasks.drop(config)
-            else
-              pool = ActiveRecord::Base.connection_handler.retrieve_connection_pool(
-                config.name,
-                role: ActiveRecord.writing_role,
-                shard: ActiveRecord::Base.default_shard,
-                strict: false
-              )
-              next unless pool
+          return if shared_configs.empty?
 
-              conn = pool.connection
-              tables = conn.tables - [ "ar_internal_metadata", "schema_migrations" ]
-              tables.each do |table|
-                conn.execute("DELETE FROM #{conn.quote_table_name(table)}")
-              end
-            end
+          shared_configs.each do |config|
+            ActiveRecord::Tasks::DatabaseTasks.drop(config)
           rescue => e
             Rails.logger.warn "Failed to cleanup shared database #{config.name}: #{e.message}"
           end
