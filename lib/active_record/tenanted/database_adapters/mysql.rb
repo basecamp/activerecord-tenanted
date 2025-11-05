@@ -38,8 +38,7 @@ module ActiveRecord
                 end
               end
             end
-          rescue ActiveRecord::NoDatabaseError, Mysql2::Error => e
-            Rails.logger.warn "Could not list tenant databases: #{e.message}"
+          rescue ActiveRecord::NoDatabaseError, Mysql2::Error
             []
           end
         end

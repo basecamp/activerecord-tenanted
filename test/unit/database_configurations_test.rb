@@ -283,6 +283,65 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
       end
     end
 
+    describe "new_tenant_config" do
+      describe "with_host" do
+        let(:adapter) { "mysql2" }
+        let(:database) { "tenanted_%{tenant}_db" }
+
+        test "preserves static host in tenant config" do
+          config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+            "test",
+            "test_tenant",
+            { adapter: adapter, database: database, host: "mysql.example.com" }
+          )
+
+          tenant_config = config.new_tenant_config("foo")
+
+          assert_equal("mysql.example.com", tenant_config.host)
+          assert_equal("tenanted_foo_db", tenant_config.database)
+        end
+
+        test "formats host with tenant placeholder in tenant config" do
+          config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+            "test",
+            "test_tenant",
+            { adapter: adapter, database: database, host: "%{tenant}.mysql.example.com" }
+          )
+
+          tenant_config = config.new_tenant_config("foo")
+
+          assert_equal("foo.mysql.example.com", tenant_config.host)
+          assert_equal("tenanted_foo_db", tenant_config.database)
+        end
+
+        test "formats host correctly for different tenant names" do
+          config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+            "test",
+            "test_tenant",
+            { adapter: adapter, database: database, host: "%{tenant}.mysql.example.com" }
+          )
+
+          foo_config = config.new_tenant_config("foo")
+          bar_config = config.new_tenant_config("bar")
+
+          assert_equal("foo.mysql.example.com", foo_config.host)
+          assert_equal("bar.mysql.example.com", bar_config.host)
+        end
+
+        test "does not include host in tenant config when not provided" do
+          config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+            "test",
+            "test_tenant",
+            { adapter: adapter, database: database }
+          )
+
+          tenant_config = config.new_tenant_config("foo")
+
+          assert_nil(tenant_config.host)
+        end
+      end
+    end
+
     describe "max_connection_pools" do
       test "defaults to 50" do
         config_hash = { adapter: "sqlite3", database: "database" }

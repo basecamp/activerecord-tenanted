@@ -36,11 +36,6 @@ module ActiveRecord
           db
         end
 
-        def host_for(tenant_name)
-          return nil unless host&.include?("%{tenant}")
-          sprintf(host, tenant: tenant_name)
-        end
-
         def tenants
           all_databases = ActiveRecord::Base.configurations.configs_for(env_name: env_name)
           untenanted = all_databases.reject { |c| c.configuration_hash[:tenanted] }.filter_map(&:database)
@@ -74,6 +69,12 @@ module ActiveRecord
         def max_connection_pools
           (configuration_hash[:max_connection_pools] || DEFAULT_MAX_CONNECTION_POOLS).to_i
         end
+
+        private
+          def host_for(tenant_name)
+            return nil unless host&.include?("%{tenant}")
+            sprintf(host, tenant: tenant_name)
+          end
       end
     end
   end
