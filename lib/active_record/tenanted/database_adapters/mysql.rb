@@ -90,12 +90,6 @@ module ActiveRecord
           ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
             connection.execute("DROP DATABASE IF EXISTS #{connection.quote_table_name(database_path)}")
           end
-        rescue Mysql2::Error => e
-          if e.message.include?("Can't drop database") || e.message.include?("doesn't exist")
-            Rails.logger.debug "Database #{database_path} doesn't exist or already dropped"
-          else
-            raise
-          end
         end
 
         def database_exist?
