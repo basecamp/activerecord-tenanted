@@ -62,17 +62,6 @@ module ActiveRecord
           if database_name.match?(/^\d/)
             raise ActiveRecord::Tenanted::BadTenantNameError, "Database name cannot start with a number: #{database_name.inspect}"
           end
-
-          reserved_words = %w[
-            database databases table tables column columns index indexes
-            select insert update delete create drop alter
-            user users group groups order by from where
-            and or not null true false
-          ]
-
-          if reserved_words.include?(database_name.downcase)
-            raise ActiveRecord::Tenanted::BadTenantNameError, "Database name is a reserved MySQL keyword: #{database_name.inspect}"
-          end
         end
 
         def create_database
