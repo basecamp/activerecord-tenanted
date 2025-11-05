@@ -80,15 +80,12 @@ module ActiveRecord
         end
 
         def all_scenarios
-          filter_adapter = ENV["TEST_ADAPTER"]
           Dir.glob(File.join(__dir__, "scenarios", "*", "*", "database.yml"))
             .each_with_object({}) do |db_config_path, scenarios|
             db_config_dir = File.dirname(db_config_path)
             db_adapter = File.basename(File.dirname(db_config_dir))
             db_scenario = File.basename(db_config_dir)
             model_files = Dir.glob(File.join(db_config_dir, "*.rb"))
-
-            next if filter_adapter && db_adapter != filter_adapter
 
             scenarios["#{db_adapter}/#{db_scenario}"] = model_files.map { File.basename(_1, ".*") }
           end
@@ -240,15 +237,17 @@ module ActiveRecord
       end
 
       def with_schema_dump_file
-        schema_file = Dir.glob("test/scenarios/*/schema.rb").first
-        FileUtils.cp schema_file,
-                     ActiveRecord::Tasks::DatabaseTasks.schema_dump_path(base_config)
+        Dir.glob("test/scenarios/*/schema.rb").each do |schema_file|
+          FileUtils.cp schema_file,
+            ActiveRecord::Tasks::DatabaseTasks.schema_dump_path(base_config)
+        end
       end
 
       def with_schema_cache_dump_file
-        cache_file = Dir.glob("test/scenarios/*/schema_cache.yml").first
-        FileUtils.cp cache_file,
-                     ActiveRecord::Tasks::DatabaseTasks.cache_dump_filename(base_config)
+        Dir.glob("test/scenarios/*/schema_cache.yml").each do |cache_file|
+          FileUtils.cp cache_file,
+            ActiveRecord::Tasks::DatabaseTasks.cache_dump_filename(base_config)
+        end
       end
 
       def with_new_migration_file
