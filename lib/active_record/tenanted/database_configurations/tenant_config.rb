@@ -13,20 +13,6 @@ module ActiveRecord
           configuration_hash.fetch(:tenant)
         end
 
-        def database
-          configuration_hash.fetch(:database)
-        end
-
-        def configuration_hash
-          hash = super
-          if hash[:database]&.include?("%{tenant}")
-            hash = hash.dup
-            tenant_name = hash.fetch(:tenant)
-            hash[:database] = sprintf(hash[:database], tenant: tenant_name)
-          end
-          hash
-        end
-
         def config_adapter
           @config_adapter ||= ActiveRecord::Tenanted::DatabaseAdapter.new(self)
         end

@@ -2,7 +2,7 @@
 
 module ActiveRecord
   module Tenanted
-    module DatabaseAdapters
+    module DatabaseAdapters # :nodoc:
       class MySQL
         attr_reader :db_config
 
