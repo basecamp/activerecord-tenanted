@@ -94,6 +94,7 @@ def run_scenario(scenario)
       mysql_env = ENV.select { |k, _| k.start_with?("MYSQL_") }
       mysql_env["MYSQL_UNIQUE_PREFIX"] = db_prefix
 
+      # For MySQL, we need to ensure that each database has a unique name otherwise we'll have contention in the test suite and everything will get locked up.
       adapter_config = if scenario[:adapter] == "mysql"
         { "RAILS_ENV" => "test", "ARTENANT_SCHEMA_DUMP" => "1", "MYSQL_UNIQUE_PREFIX" => db_prefix }
       else
@@ -112,9 +113,9 @@ def run_scenario(scenario)
 
       # run in parallel half the time
       env = if rand(2).zero?
-        { "PARALLEL_WORKERS" => "2" }
+        { "PARALLEL_WORKERS" => "2" , **adapter_config}
       else
-        { "PARALLEL_WORKERS" => "1" }
+        { "PARALLEL_WORKERS" => "1" , **adapter_config }
       end
 
       run_cmd(scenario, ["bin/rails test", *TEST_ARGS].join(" "), verbose: true, env:)

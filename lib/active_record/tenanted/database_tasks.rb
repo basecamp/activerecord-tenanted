@@ -102,6 +102,7 @@ module ActiveRecord
             end
           end
 
+          # migrate
           migrated = false
 
           if pool.migration_context.pending_migration_versions.present?
@@ -110,6 +111,7 @@ module ActiveRecord
             migrated = true
           end
 
+          # dump the schema and schema cache
           if Rails.env.development? || ENV["ARTENANT_SCHEMA_DUMP"].present?
             if migrated || !database_already_initialized
               ActiveRecord::Tasks::DatabaseTasks.dump_schema(config)
