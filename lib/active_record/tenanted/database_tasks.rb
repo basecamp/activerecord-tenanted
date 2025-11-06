@@ -111,9 +111,7 @@ module ActiveRecord
           end
 
           if Rails.env.development? || ENV["ARTENANT_SCHEMA_DUMP"].present?
-            should_dump_schema = migrated || !database_already_initialized || (config.primary? && ENV["ARTENANT_SCHEMA_DUMP"].present?)
-
-            if should_dump_schema
+            if migrated || !database_already_initialized
               ActiveRecord::Tasks::DatabaseTasks.dump_schema(config)
             end
 
