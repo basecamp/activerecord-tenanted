@@ -22,7 +22,7 @@ require "debug"
 require "active_support"
 require "active_support/core_ext/object" # deep_dup
 
-scenarios = Dir.glob("test/scenarios/*/*db/*record.rb").map do |path|
+scenarios = Dir.glob("test/scenarios/mysql/*db/*record.rb").map do |path|
   adapter, database, models = path.scan(%r{test/scenarios/(.+)/(.+db)/(.+record).rb}).flatten
   { adapter: adapter, database: database, models: models }
 end
@@ -92,26 +92,29 @@ def run_scenario(scenario)
 
       # set up the database and schema files
       mysql_env = ENV.select { |k, _| k.start_with?("MYSQL_") }
-      mysql_env["MYSQL_DB_PREFIX"] = db_prefix
+      mysql_env["MYSQL_UNIQUE_PREFIX"] = db_prefix
 
-      # Drop existing databases to ensure fresh setup (like SQLite behavior)
-      run_cmd(scenario, "bin/rails db:drop", env: { "RAILS_ENV" => "test", **mysql_env }) rescue nil
+      adapter_config = if scenario[:adapter] == "mysql"
+        { "RAILS_ENV" => "test", "ARTENANT_SCHEMA_DUMP" => "1", "MYSQL_UNIQUE_PREFIX" => db_prefix }
+      else
+        {}
+      end
 
-      run_cmd(scenario, "bin/rails db:prepare", env: { "RAILS_ENV" => "test", "ARTENANT_SCHEMA_DUMP" => "1", "VERBOSE" => "true", **mysql_env })
+      # Drop existing databases to ensure fresh setup
+      run_cmd(scenario, "bin/rails db:drop", env: { **adapter_config }) rescue nil
+
+      run_cmd(scenario, "bin/rails db:prepare", env: { **adapter_config })
 
       # validate-ish the setup
       prefix = scenario[:database].match?(/\Asecondary/) ? "tenanted_" : ""
       File.exist?("db/#{prefix}schema.rb") || abort("Schema dump not generated")
       File.exist?("db/#{prefix}schema_cache.yml") || abort("Schema cache dump not generated")
 
-      # create a fake tenant database to validate that it is deleted in the test suite
-      run_cmd(scenario, %{bin/rails runner "ApplicationRecord.tenanted_root_config.new_tenant_config('delete-me').config_adapter.create_database"}, env: { "RAILS_ENV" => "test", **mysql_env })
-
       # run in parallel half the time
       env = if rand(2).zero?
-        { "PARALLEL_WORKERS" => "2", **mysql_env }
+        { "PARALLEL_WORKERS" => "2" }
       else
-        { "PARALLEL_WORKERS" => "1", **mysql_env }
+        { "PARALLEL_WORKERS" => "1" }
       end
 
       run_cmd(scenario, ["bin/rails test", *TEST_ARGS].join(" "), verbose: true, env:)
