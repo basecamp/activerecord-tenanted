@@ -1,0 +1,23 @@
+default: &default
+  adapter: mysql2
+  encoding: utf8mb4
+  pool: 20
+  max_connections: 20
+  username: root
+  password: devcontainer
+  host: <%= ENV.fetch('MYSQL_HOST', 'mysql') %>
+  port: 3306
+  sslmode: disabled
+
+test:
+  shared:
+    <<: *default
+    database: <%= ENV.fetch('MYSQL_UNIQUE_PREFIX', 'test') %>-shared
+    migrations_paths: "%{db_path}/shared_migrations"
+  tenanted:
+    <<: *default
+    tenanted: true
+    database: <%= ENV.fetch('MYSQL_UNIQUE_PREFIX', 'test') %>-%%{tenant}
+    migrations_paths: "%{db_path}/tenanted_migrations"
+
+

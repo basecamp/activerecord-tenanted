@@ -90,11 +90,10 @@ def run_scenario(scenario)
     Bundler.with_original_env do
       run_cmd(scenario, "bundle check || bundle install")
 
-      adapter_config = if scenario[:adapter] == "mysql"
-        { "RAILS_ENV" => "test", "ARTENANT_SCHEMA_DUMP" => "1", "MYSQL_UNIQUE_PREFIX" => db_prefix }
-      else
-        {}
-      end
+     adapter_config = {"RAILS_ENV" => "test","ARTENANT_SCHEMA_DUMP" => "1"}
+     if scenario[:adapter] == "mysql"
+       adapter_config.merge!({ "MYSQL_UNIQUE_PREFIX" => db_prefix })
+     end
 
       # Drop existing databases to ensure fresh setup
       run_cmd(scenario, "bin/rails db:drop", env: { **adapter_config }) rescue nil
@@ -108,9 +107,9 @@ def run_scenario(scenario)
 
       # run in parallel half the time
       env = if rand(2).zero?
-        { "PARALLEL_WORKERS" => "2" , **adapter_config}
+        { "PARALLEL_WORKERS" => "2", **adapter_config }
       else
-        { "PARALLEL_WORKERS" => "1" , **adapter_config }
+        { "PARALLEL_WORKERS" => "1", **adapter_config }
       end
 
       run_cmd(scenario, ["bin/rails test", *TEST_ARGS].join(" "), verbose: true, env:)
