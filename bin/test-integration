@@ -22,7 +22,7 @@ require "debug"
 require "active_support"
 require "active_support/core_ext/object" # deep_dup
 
-scenarios = Dir.glob("test/scenarios/mysql/*db/*record.rb").map do |path|
+scenarios = Dir.glob("test/scenarios/*/*db/*record.rb").map do |path|
   adapter, database, models = path.scan(%r{test/scenarios/(.+)/(.+db)/(.+record).rb}).flatten
   { adapter: adapter, database: database, models: models }
 end
@@ -90,11 +90,6 @@ def run_scenario(scenario)
     Bundler.with_original_env do
       run_cmd(scenario, "bundle check || bundle install")
 
-      # set up the database and schema files
-      mysql_env = ENV.select { |k, _| k.start_with?("MYSQL_") }
-      mysql_env["MYSQL_UNIQUE_PREFIX"] = db_prefix
-
-      # For MySQL, we need to ensure that each database has a unique name otherwise we'll have contention in the test suite and everything will get locked up.
       adapter_config = if scenario[:adapter] == "mysql"
         { "RAILS_ENV" => "test", "ARTENANT_SCHEMA_DUMP" => "1", "MYSQL_UNIQUE_PREFIX" => db_prefix }
       else
