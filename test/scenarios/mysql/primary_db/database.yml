@@ -5,7 +5,7 @@ default: &default
   max_connections: 20
   username: root
   password: devcontainer
-  host: mysql
+  host: <%= ENV.fetch('MYSQL_HOST', 'mysql') %>
   port: 3306
   sslmode: disabled
 
@@ -13,10 +13,10 @@ test:
   primary:
     <<: *default
     tenanted: true
-    database: <%= ENV.fetch('MYSQL_UNIQUE_PREFIX', 'primary') %>-%%{tenant}
+    database: <%= ENV.fetch('MYSQL_UNIQUE_PREFIX', 'test') %>-%%{tenant}
     migrations_paths: "%{db_path}/tenanted_migrations"
   shared:
     <<: *default
-    database: <%= ENV.fetch('MYSQL_UNIQUE_PREFIX', 'primary') %>-shared
+    database: <%= ENV.fetch('MYSQL_UNIQUE_PREFIX', 'test') %>-shared
     migrations_paths: "%{db_path}/shared_migrations"
 
