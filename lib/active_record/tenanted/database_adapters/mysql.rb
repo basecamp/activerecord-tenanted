@@ -121,10 +121,13 @@ module ActiveRecord
 
       private
         def configuration_hash_without_database
-          configuration_hash = db_config.configuration_hash.dup.merge(database: nil)
+          configuration_hash = db_config.configuration_hash.dup.merge(
+            database: nil,
+            database_tasks: false
+          )
           ActiveRecord::DatabaseConfigurations::HashConfig.new(
             db_config.env_name,
-            db_config.name.to_s,
+            "_tmp_#{db_config.name}",
             configuration_hash
           )
         end

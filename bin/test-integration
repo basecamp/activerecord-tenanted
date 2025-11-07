@@ -30,7 +30,7 @@ end
 COLOR_FG_BLUE = "\e[0;34m"
 COLOR_RESET = "\e[0m"
 
-def run_cmd(scenario, cmd, verbose: true, env: {})
+def run_cmd(scenario, cmd, verbose: false, env: {})
   message = "#{COLOR_FG_BLUE}#{scenario}#{COLOR_RESET} > #{env.presence} #{cmd}"
   print message + (PARALLEL ? "\n" : "")
 
@@ -107,9 +107,9 @@ def run_scenario(scenario)
 
       # run in parallel half the time
       env = if rand(2).zero?
-        { "PARALLEL_WORKERS" => "2", **adapter_config }
+        { "PARALLEL_WORKERS" => "2" }
       else
-        { "PARALLEL_WORKERS" => "1", **adapter_config }
+        { "PARALLEL_WORKERS" => "1" }
       end
 
       run_cmd(scenario, ["bin/rails test", *TEST_ARGS].join(" "), verbose: true, env:)

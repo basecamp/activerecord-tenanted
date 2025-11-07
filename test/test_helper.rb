@@ -229,7 +229,7 @@ module ActiveRecord
       end
 
       def all_configs
-        ActiveRecord::Base.configurations.configs_for(include_hidden: true)
+        ActiveRecord::Base.configurations.configs_for(env_name: "test", include_hidden: true)
       end
 
       def base_config
