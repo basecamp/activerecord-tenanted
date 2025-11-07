@@ -41,45 +41,26 @@ class TestTurboBroadcast < ApplicationSystemTestCase
       puts "Has turbo-cable-stream-source: #{has_stream}"
 
       if has_stream
-        # ES5-compatible JavaScript
-        connected = page.evaluate_script(<<~JS)
-        (function() {
-          var streamSource = document.querySelector('turbo-cable-stream-source');
-          if (streamSource) {
-            var subscription = streamSource.subscription;
-            var consumer = streamSource.consumer;
-            var connection = consumer ? consumer.connection : null;
-            var connectionState = connection ? (connection.getState ? connection.getState() : 'unknown') : 'no-connection';
-            var isActive = connection ? (connection.isActive ? connection.isActive() : false) : false;
+        # Simple checks without complex JavaScript
+        has_connected_attr = page.has_css?("turbo-cable-stream-source[connected]", visible: false)
+        puts "Has 'connected' attribute: #{has_connected_attr}"
 
-            return {
-              hasElement: true,
-              hasConnectedAttr: streamSource.hasAttribute('connected'),
-              hasSubscription: !!subscription,
-              consumerState: connectionState,
-              consumerIsActive: isActive,
-              signedStreamName: streamSource.getAttribute('signed-stream-name') || 'none'
-            };
-          } else {
-            return { hasElement: false };
-          }
-        })();
-        JS
-        puts "Connection details: #{connected.inspect}"
-
-        # Check the actual HTML
+        # Get the HTML of the element
         stream_html = page.find("turbo-cable-stream-source", visible: false)[:outerHTML] rescue "not found"
-        puts "Stream element HTML: #{stream_html}"
+        puts "Stream element: #{stream_html}"
+
+        # Check if subscription exists - simpler approach
+        has_subscription = page.evaluate_script("!!document.querySelector('turbo-cable-stream-source').subscription") rescue false
+        puts "Has subscription object: #{has_subscription}"
       end
 
-      # Check current body content
-      body_elem = page.all("div", text: /Body:/).first
-      body_text = body_elem ? body_elem.text : "not found"
-      puts "Current body on page: #{body_text}"
-
-      # Check the note body specifically
-      note_body = page.all("div").find { |div| div.text.match?(/note \d+ version \d+/) }
-      puts "Note body element: #{note_body ? note_body.text : 'not found'}"
+      # Check current page content
+      current_body = page.text
+      if current_body =~ /note 1 version (\d+)/
+        puts "Current note version shown: version #{$1}"
+      else
+        puts "Could not find note version in page"
+      end
 
       puts "===================\n"
     end
