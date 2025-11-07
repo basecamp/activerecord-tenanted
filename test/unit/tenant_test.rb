@@ -650,7 +650,7 @@ describe ActiveRecord::Tenanted::Tenant do
   end
 
   describe ".create_tenant" do
-    with_scenario(:primary_named_db, :primary_record) do
+    with_scenario("sqlite/primary_named_db", :primary_record) do
       describe "failed migration because database is readonly" do
         setup do
           db_config["test"]["tenanted"]["readonly"] = true
