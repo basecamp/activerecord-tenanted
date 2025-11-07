@@ -13,15 +13,12 @@ class TestTurboBroadcast < ApplicationSystemTestCase
     visit note_url(note1)
     assert_text("note 1 version 1")
 
-    # Debug: Check Turbo Stream connection state
     debug_turbo_stream_connection("after visit, before update")
 
     note1.update!(body: "note 1 version 2")
 
-    # Debug: Check state after update
     debug_turbo_stream_connection("after update")
 
-    # Give it a moment to process
     sleep 0.1 if ENV["CI"]
     debug_turbo_stream_connection("after sleep")
 
@@ -40,28 +37,33 @@ class TestTurboBroadcast < ApplicationSystemTestCase
 
       puts "\n=== DEBUG: #{label} ==="
 
-      # Check if turbo-cable-stream-source element exists
       has_stream = page.has_css?("turbo-cable-stream-source", visible: false)
       puts "Has turbo-cable-stream-source: #{has_stream}"
 
       if has_stream
-        # Check connection state via JavaScript
+        # ES5-compatible JavaScript
         connected = page.evaluate_script(<<~JS)
-        const streamSource = document.querySelector('turbo-cable-stream-source');
-        if (streamSource) {
-          const subscription = streamSource.subscription;
-          console.log('Stream source found:', streamSource);
-          console.log('Subscription:', subscription);
-          console.log('Consumer state:', streamSource.consumer?.connection?.isActive());
-          {
-            hasElement: true,
-            hasConnectedAttr: streamSource.hasAttribute('connected'),
-            hasSubscription: !!subscription,
-            consumerState: streamSource.consumer?.connection?.getState?.() || 'unknown'
+        (function() {
+          var streamSource = document.querySelector('turbo-cable-stream-source');
+          if (streamSource) {
+            var subscription = streamSource.subscription;
+            var consumer = streamSource.consumer;
+            var connection = consumer ? consumer.connection : null;
+            var connectionState = connection ? (connection.getState ? connection.getState() : 'unknown') : 'no-connection';
+            var isActive = connection ? (connection.isActive ? connection.isActive() : false) : false;
+
+            return {
+              hasElement: true,
+              hasConnectedAttr: streamSource.hasAttribute('connected'),
+              hasSubscription: !!subscription,
+              consumerState: connectionState,
+              consumerIsActive: isActive,
+              signedStreamName: streamSource.getAttribute('signed-stream-name') || 'none'
+            };
+          } else {
+            return { hasElement: false };
           }
-        } else {
-          { hasElement: false }
-        }
+        })();
         JS
         puts "Connection details: #{connected.inspect}"
 
@@ -71,8 +73,13 @@ class TestTurboBroadcast < ApplicationSystemTestCase
       end
 
       # Check current body content
-      body_text = page.find("div", text: /Body:/).text rescue "not found"
+      body_elem = page.all("div", text: /Body:/).first
+      body_text = body_elem ? body_elem.text : "not found"
       puts "Current body on page: #{body_text}"
+
+      # Check the note body specifically
+      note_body = page.all("div").find { |div| div.text.match?(/note \d+ version \d+/) }
+      puts "Note body element: #{note_body ? note_body.text : 'not found'}"
 
       puts "===================\n"
     end
