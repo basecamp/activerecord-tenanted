@@ -7,4 +7,9 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     driver_option.add_argument("--disable-dev-shm-usage")
     driver_option.add_argument("--no-sandbox")
   end
+
+  def setup
+    ActionCable.server.config.cable = { "adapter" => "async" }
+    super
+  end
 end
