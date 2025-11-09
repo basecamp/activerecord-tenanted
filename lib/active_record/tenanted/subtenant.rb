@@ -6,6 +6,8 @@ module ActiveRecord
       extend ActiveSupport::Concern
 
       class_methods do
+        include CrossTenantAssociations::ClassMethods
+
         def tenanted?
           true
         end

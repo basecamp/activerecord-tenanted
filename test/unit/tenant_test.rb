@@ -581,6 +581,330 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "cross-tenant associations" do
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_one :announcement
+        Announcement.belongs_to :user
+      end
+
+      test "has_one automatically scopes by tenant_id" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Foo announcement", tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_nil user.announcement
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcement
+          assert_equal "Foo announcement", user.announcement.message
+        end
+      end
+    end
+
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_many :announcements
+        Announcement.belongs_to :user
+      end
+
+      test "has_many automatically scopes by tenant_id" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Foo announcement", tenant_id: "foo", user: user)
+          Announcement.create!(message: "Another Foo announcement", tenant_id: "foo", user: user)
+          Announcement.create!(message: "Yet another Foo announcement", tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_equal 0, user.announcements.count
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcements
+          assert_equal 3, user.announcements.count
+          assert_equal "Foo announcement", user.announcements.first.message
+          assert_equal "Another Foo announcement", user.announcements.second.message
+          assert_equal "Yet another Foo announcement", user.announcements.third.message
+        end
+      end
+    end
+  end
+
+  describe "cross-tenant associations with scope" do
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_one :announcement, -> { where(message: "Special announcement") }
+        Announcement.belongs_to :user
+      end
+
+      test "has_one automatically scopes by tenant_id and scope" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Special announcement", tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_nil user.announcement
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcement
+          assert_equal "Special announcement", user.announcement.message
+        end
+      end
+    end
+
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_many :announcements, -> { where(message: "Special announcement") }
+        Announcement.belongs_to :user
+      end
+
+      test "has_many automatically scopes by tenant_id and scope" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Special announcement", tenant_id: "foo", user: user)
+          Announcement.create!(message: "Another announcement", tenant_id: "foo", user: user)
+          Announcement.create!(message: "Yet another announcement", tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_equal 0, user.announcements.count
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcements
+          assert_equal 1, user.announcements.count
+          assert_equal "Special announcement", user.announcements.first.message
+        end
+      end
+    end
+  end
+
+  describe "cross-tenant associations with custom tenant column and class name" do
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :custom_tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_one :announcement, class_name: "Announcement", tenant_key: :custom_tenant_id
+        Announcement.belongs_to :user
+      end
+
+      test "has_one automatically scopes by custom tenant id and class name" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Special announcement", custom_tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_nil user.announcement
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcement
+          assert_equal "Special announcement", user.announcement.message
+        end
+      end
+    end
+
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :custom_tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_many :announcements, class_name: "Announcement", tenant_key: :custom_tenant_id
+        Announcement.belongs_to :user
+      end
+
+      test "has_many automatically scopes by custom tenant id and class name" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Foo announcement", custom_tenant_id: "foo", user: user)
+          Announcement.create!(message: "Another Foo announcement", custom_tenant_id: "foo", user: user)
+          Announcement.create!(message: "Yet another Foo announcement", custom_tenant_id: "foo", user: user)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_equal 0, user.announcements.count
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.announcements
+          assert_equal 3, user.announcements.count
+          assert_equal "Foo announcement", user.announcements.first.message
+          assert_equal "Another Foo announcement", user.announcements.second.message
+          assert_equal "Yet another Foo announcement", user.announcements.third.message
+        end
+      end
+    end
+  end
+
+  describe "cross-tenant associations with belongs_to" do
+    for_each_scenario do
+      setup do
+        with_migration "20250830152220_create_posts.rb"
+
+        Post.belongs_to :author, class_name: "User", foreign_key: "user_id", tenant_key: :author_tenant_id
+      end
+
+      test "belongs_to automatically populates tenant column when association is set" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          user = User.create!(email: "author@foo.example.org")
+
+          post = Post.new(title: "Test Post")
+          post.author = user
+
+          assert_equal "foo", post.author_tenant_id
+
+          post.save!
+
+          saved_post = Post.find(post.id)
+          assert_equal "foo", saved_post.author_tenant_id
+        end
+      end
+
+      test "belongs_to auto-population works when creating with association in constructor" do
+        TenantedApplicationRecord.create_tenant("bar") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          user = User.create!(email: "author@bar.example.org")
+
+          post = Post.create!(title: "Test Post", author: user)
+
+          assert_equal "bar", post.author_tenant_id
+        end
+      end
+
+      test "belongs_to auto-population handles nil association" do
+        TenantedApplicationRecord.create_tenant("baz") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          post = Post.new(title: "Test Post")
+          post.author = nil
+
+          assert_nil post.author_tenant_id
+        end
+      end
+
+      test "belongs_to updates tenant column when reassigning to different user" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          user1 = User.create!(email: "author1@foo.example.org")
+          user2 = User.create!(email: "author2@foo.example.org")
+
+          post = Post.new(title: "Test Post")
+          post.author = user1
+
+          assert_equal "foo", post.author_tenant_id
+
+          post.author = user2
+
+          assert_equal "foo", post.author_tenant_id
+        end
+      end
+
+      test "belongs_to without tenant_key does not auto-populate" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :some_tenant_column, :string
+
+          Post.belongs_to :editor, class_name: "User", foreign_key: "user_id"
+
+          user = User.create!(email: "editor@foo.example.org")
+          post = Post.new(title: "Test Post", some_tenant_column: nil)
+          post.editor = user
+
+          assert_nil post.some_tenant_column
+        end
+      end
+
+      test "multiple belongs_to associations with different tenant_keys work independently" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+          Post.connection.add_column :posts, :reviewer_tenant_id, :string
+          Post.connection.add_column :posts, :reviewer_id, :integer
+
+          Post.belongs_to :author, class_name: "User", foreign_key: "user_id", tenant_key: :author_tenant_id
+          Post.belongs_to :reviewer, class_name: "User", foreign_key: "reviewer_id", tenant_key: :reviewer_tenant_id
+
+          author = User.create!(email: "author@foo.example.org")
+          reviewer = User.create!(email: "reviewer@foo.example.org")
+
+          post = Post.new(title: "Test Post")
+          post.author = author
+          post.reviewer = reviewer
+
+          assert_equal "foo", post.author_tenant_id
+          assert_equal "foo", post.reviewer_tenant_id
+
+          post.save!
+
+          saved_post = Post.find(post.id)
+          assert_equal "foo", saved_post.author_tenant_id
+          assert_equal "foo", saved_post.reviewer_tenant_id
+        end
+      end
+
+      test "belongs_to auto-population works when updating existing record" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          Post.connection.add_column :posts, :author_tenant_id, :string
+
+          user1 = User.create!(email: "author1@foo.example.org")
+          user2 = User.create!(email: "author2@foo.example.org")
+
+          post = Post.create!(title: "Test Post", author: user1)
+          assert_equal "foo", post.author_tenant_id
+
+          post.update!(author: user2)
+
+          assert_equal "foo", post.reload.author_tenant_id
+        end
+      end
+    end
+  end
 
   describe ".without_tenant" do
     for_each_scenario do
