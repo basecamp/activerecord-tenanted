@@ -6,7 +6,7 @@ gemspec
 
 group :development, :test do
   gem "rails", github: "rails/rails", branch: "main"
-  gem "sqlite3", "2.7.4"
+  gem "sqlite3", "2.8.0"
   gem "debug", "1.11.0"
   gem "minitest-parallel_fork", "2.1.0", require: false
 end
