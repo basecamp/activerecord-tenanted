@@ -6,7 +6,12 @@ module ActiveRecord
       module DiskService
         def root
           if klass = ActiveRecord::Tenanted.connection_class
-            unless tenant = klass.current_tenant
+            tenant = klass.current_tenant
+            allow_untenanted = Rails.application.config.active_record_tenanted.allow_untenanted_active_storage
+
+            if tenant.nil?
+              return super if allow_untenanted
+
               raise NoTenantError, "Cannot access Active Storage Disk service without a tenant"
             end
 
@@ -18,12 +23,12 @@ module ActiveRecord
 
         def path_for(key)
           if ActiveRecord::Tenanted.connection_class
-            # TODO: this is brittle if the key isn't tenanted ... errors in folder_for:
-            #
-            #   NoMethodError undefined method '[]' for nil (NoMethodError) [ key[0..1], key[2..3] ].join("/")
-            #
-            tenant, key = key.split("/", 2)
-            File.join(root, tenant, folder_for(key), key)
+            if key.include?("/")
+              tenant, key = key.split("/", 2)
+              File.join(root, tenant, folder_for(key), key)
+            else
+              super
+            end
           else
             super
           end
@@ -33,7 +38,12 @@ module ActiveRecord
       module Blob
         def key
           self[:key] ||= if klass = ActiveRecord::Tenanted.connection_class
-            unless tenant = klass.current_tenant
+            tenant = klass.current_tenant
+            allow_untenanted = Rails.application.config.active_record_tenanted.allow_untenanted_active_storage
+
+            if tenant.nil?
+              return super if allow_untenanted
+
               raise NoTenantError, "Cannot generate a Blob key without a tenant"
             end
 

@@ -57,6 +57,18 @@ module ActiveRecord
       # Defaults to "development-tenant" in development and "test-tenant" in test environments.
       config.active_record_tenanted.default_tenant = Rails.env.local? ? "#{Rails.env}-tenant" : nil
 
+      # Set this to true to allow Active Storage to work without a tenant context.
+      #
+      # When enabled, Active Storage will fall back to default behavior (non-tenanted storage)
+      # when there is no current tenant. This allows models in the primary database to use
+      # Active Storage alongside tenanted models.
+      #
+      # When disabled (default), Active Storage will raise NoTenantError if accessed without
+      # a tenant context, maintaining strict tenant isolation.
+      #
+      # Defaults to `false`.
+      config.active_record_tenanted.allow_untenanted_active_storage = false
+
       config.before_configuration do
         ActiveSupport.on_load(:active_record_database_configurations) do
           ActiveRecord::Tenanted::DatabaseConfigurations.register_db_config_handler
