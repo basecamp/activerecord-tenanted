@@ -2,6 +2,13 @@
 
 ## next / unreleased
 
+### Added
+
+- Add `config.active_record_tenanted.allow_untenanted_active_storage` configuration option to enable ActiveStorage without a tenant context.
+  When enabled, ActiveStorage will fallback to default (non-tenanted) behavior when there is no current tenant,
+  allowing models in the primary database to use Active Storage alongside tenanted models.
+  Defaults to `false` for backward compatibility. @keshavbiswa
+
 ### Fixed
 
 - `.current_tenant = nil` now clears the tenant context, properly setting the shard to `UNTENANTED_SENTINEL` instead of `""` @flavorjones
