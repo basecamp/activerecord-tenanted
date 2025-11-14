@@ -182,6 +182,166 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
       end
     end
 
+    describe "MySQL" do
+      let(:adapter) { "mysql2" }
+
+      describe "database_for" do
+        describe "validation" do
+          let(:database) { "test_%{tenant}_db" }
+
+          test "raises if the tenant name contains a forward slash" do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo/bar") }
+          end
+
+          test "raises if the tenant name contains a backslash" do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo\\bar") }
+          end
+
+          test "raises if the resulting database name ends with a period" do
+            config_with_period = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+              "test",
+              "test_tenant",
+              { adapter: adapter, database: "%{tenant}." }
+            )
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config_with_period.database_for("foo") }
+          end
+
+          test "raises if the tenant name contains ASCII NUL or control characters" do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo\x00bar") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo\x01bar") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo\nbar") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo\tbar") }
+          end
+
+          test "raises if the tenant name contains spaces" do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo bar") }
+          end
+
+          test "raises if the tenant name contains special characters" do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo@bar") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo#bar") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo!bar") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo*bar") }
+          end
+
+          test "raises if the resulting database name is too long (>64 chars)" do
+            long_name = "a" * 100
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for(long_name) }
+          end
+
+          test "raises if the resulting database name starts with a number" do
+            config_with_prefix = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+              "test",
+              "test_tenant",
+              { adapter: adapter, database: "%{tenant}_db" }
+            )
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config_with_prefix.database_for("123") }
+          end
+
+          test "allows valid characters: letters, numbers, underscore, dollar, and hyphen" do
+            assert_nothing_raised { config.database_for("foo_bar") }
+            assert_nothing_raised { config.database_for("foo-bar") }
+            assert_nothing_raised { config.database_for("foo$bar") }
+            assert_nothing_raised { config.database_for("foo123") }
+          end
+        end
+
+        describe "database name pattern" do
+          let(:database) { "tenanted_%{tenant}_db" }
+
+          test "returns the database name for a tenant" do
+            assert_equal("tenanted_foo_db", config.database_for("foo"))
+          end
+
+          test "works with hyphens in the pattern" do
+            config_with_hyphens = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+              "test",
+              "test_tenant",
+              { adapter: adapter, database: "tenanted-%{tenant}-db" }
+            )
+            assert_equal("tenanted-foo-db", config_with_hyphens.database_for("foo"))
+          end
+
+          describe "parallel test workers" do
+            setup { config.test_worker_id = 99 }
+
+            test "returns the worker-specific database name for a tenant" do
+              assert_equal("tenanted_foo_db_99", config.database_for("foo"))
+            end
+
+            test "appends worker id to the end of the database name" do
+              config_with_pattern = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+                "test",
+                "test_tenant",
+                { adapter: adapter, database: "prefix_%{tenant}_suffix" }
+              )
+              config_with_pattern.test_worker_id = 42
+              assert_equal("prefix_bar_suffix_42", config_with_pattern.database_for("bar"))
+            end
+          end
+        end
+      end
+    end
+
+    describe "new_tenant_config" do
+      describe "with_host" do
+        let(:adapter) { "mysql2" }
+        let(:database) { "tenanted_%{tenant}_db" }
+
+        test "preserves static host in tenant config" do
+          config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+            "test",
+            "test_tenant",
+            { adapter: adapter, database: database, host: "mysql.example.com" }
+          )
+
+          tenant_config = config.new_tenant_config("foo")
+
+          assert_equal("mysql.example.com", tenant_config.host)
+          assert_equal("tenanted_foo_db", tenant_config.database)
+        end
+
+        test "formats host with tenant placeholder in tenant config" do
+          config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+            "test",
+            "test_tenant",
+            { adapter: adapter, database: database, host: "%{tenant}.mysql.example.com" }
+          )
+
+          tenant_config = config.new_tenant_config("foo")
+
+          assert_equal("foo.mysql.example.com", tenant_config.host)
+          assert_equal("tenanted_foo_db", tenant_config.database)
+        end
+
+        test "formats host correctly for different tenant names" do
+          config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+            "test",
+            "test_tenant",
+            { adapter: adapter, database: database, host: "%{tenant}.mysql.example.com" }
+          )
+
+          foo_config = config.new_tenant_config("foo")
+          bar_config = config.new_tenant_config("bar")
+
+          assert_equal("foo.mysql.example.com", foo_config.host)
+          assert_equal("bar.mysql.example.com", bar_config.host)
+        end
+
+        test "does not include host in tenant config when not provided" do
+          config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+            "test",
+            "test_tenant",
+            { adapter: adapter, database: database }
+          )
+
+          tenant_config = config.new_tenant_config("foo")
+
+          assert_nil(tenant_config.host)
+        end
+      end
+    end
+
     describe "max_connection_pools" do
       test "defaults to 50" do
         config_hash = { adapter: "sqlite3", database: "database" }
@@ -219,10 +379,25 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
 
           assert_equal([ "bar" ], base_config.tenants)
         end
+
+        test "only returns tenants from tenanted databases, not shared databases" do
+          assert_empty(base_config.tenants)
+
+          TenantedApplicationRecord.create_tenant("foo")
+
+          assert_equal([ "foo" ], base_config.tenants)
+
+          all_databases = ActiveRecord::Base.configurations.configs_for(env_name: base_config.env_name)
+
+          untenanted_config = all_databases.reject { |c| c.configuration_hash[:tenanted] }
+          untenanted_config.each do |shared_config|
+            assert_not_includes(base_config.tenants, shared_config.database)
+          end
+        end
       end
     end
 
-    with_scenario(:primary_db, :primary_record) do
+    with_scenario("sqlite/primary_db", :primary_record) do
       test "handles non-alphanumeric characters" do
         assert_empty(base_config.tenants)
 
@@ -252,7 +427,7 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
     end
 
     describe "implicit file creation" do
-      with_scenario(:primary_db, :primary_record) do
+      with_scenario("sqlite/primary_db", :primary_record) do
         # This is probably not behavior we want, long-term. See notes about the sqlite3 adapter in
         # tenant.rb. This test is descriptive, not prescriptive.
         test "creates a file if one does not exist" do
