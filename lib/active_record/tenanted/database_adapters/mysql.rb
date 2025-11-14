@@ -16,7 +16,7 @@ module ActiveRecord
           scanner = Regexp.new("^" + Regexp.escape(scanner_pattern).gsub(Regexp.escape("(.+)"), "(.+)") + "$")
 
           begin
-            ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
+            with_anonymous_connection do |connection|
               result = connection.execute("SHOW DATABASES LIKE '#{like_pattern}'")
 
               result.filter_map do |row|
@@ -64,7 +64,7 @@ module ActiveRecord
         end
 
         def create_database
-          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
+          with_anonymous_connection do |connection|
             create_options = Hash.new.tap do |options|
               options[:charset] = db_config.configuration_hash[:encoding] if db_config.configuration_hash.include?(:encoding)
               options[:collation] = db_config.configuration_hash[:collation] if db_config.configuration_hash.include?(:collation)
@@ -75,13 +75,13 @@ module ActiveRecord
         end
 
         def drop_database
-          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
+          with_anonymous_connection do |connection|
             connection.execute("DROP DATABASE IF EXISTS #{connection.quote_table_name(database_path)}")
           end
         end
 
         def database_exist?
-          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database) do |connection|
+          with_anonymous_connection do |connection|
             result = connection.execute("SHOW DATABASES LIKE '#{database_path}'")
             result.any?
           end
@@ -120,6 +120,10 @@ module ActiveRecord
         end
 
       private
+        def with_anonymous_connection(&block)
+          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(configuration_hash_without_database, &block)
+        end
+
         def configuration_hash_without_database
           configuration_hash = db_config.configuration_hash.dup.merge(
             database: nil,
