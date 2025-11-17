@@ -6,7 +6,7 @@ gemspec
 
 group :development, :test do
   gem "rails", github: "rails/rails", branch: "main"
-  gem "sqlite3", "2.7.4"
+  gem "sqlite3", "2.8.0"
   gem "debug", "1.11.0"
   gem "minitest-parallel_fork", "2.1.0", require: false
 end
@@ -15,7 +15,7 @@ group :rubocop do
   gem "rubocop-minitest", "0.38.2", require: false
   gem "rubocop-packaging", "0.6.0", require: false
   gem "rubocop-performance", "1.26.1", require: false
-  gem "rubocop-rails", "2.33.4", require: false
+  gem "rubocop-rails", "2.34.0", require: false
   gem "rubocop-rake", "0.7.1", require: false
 end
 
