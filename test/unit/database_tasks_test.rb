@@ -132,4 +132,57 @@ describe ActiveRecord::Tenanted::DatabaseTasks do
       end
     end
   end
+
+  describe ".rollback_tenant" do
+    for_each_scenario do
+      setup do
+        with_new_migration_file
+        ActiveRecord::Tenanted::DatabaseTasks.new(base_config).migrate_tenant("foo")
+      end
+
+      test "rolls back the most recent migration" do
+        ActiveRecord::Tenanted::DatabaseTasks.new(base_config).rollback_tenant("foo")
+
+        config = base_config.new_tenant_config("foo")
+        ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(config) do |conn|
+          assert_equal(20250203191115, conn.pool.migration_context.current_version)
+        end
+      end
+
+      test "accepts a custom step count" do
+        ActiveRecord::Tenanted::DatabaseTasks.new(base_config).rollback_tenant("foo", step: 2)
+
+        config = base_config.new_tenant_config("foo")
+        ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(config) do |conn|
+          assert_equal(0, conn.pool.migration_context.current_version)
+        end
+      end
+    end
+  end
+
+  describe ".rollback_all" do
+    for_each_scenario do
+      let(:tenants) { %w[foo bar baz] }
+
+      setup do
+        tenants.each do |tenant|
+          TenantedApplicationRecord.create_tenant(tenant)
+        end
+
+        with_new_migration_file
+        ActiveRecord::Tenanted::DatabaseTasks.new(base_config).migrate_all
+      end
+
+      test "rolls back all existing tenants" do
+        ActiveRecord::Tenanted::DatabaseTasks.new(base_config).rollback_all
+
+        tenants.each do |tenant|
+          config = base_config.new_tenant_config(tenant)
+          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(config) do |conn|
+            assert_equal(20250203191115, conn.pool.migration_context.current_version)
+          end
+        end
+      end
+    end
+  end
 end
