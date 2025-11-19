@@ -11,6 +11,38 @@ module ActiveRecord
         def verbose?
           ActiveRecord::Tasks::DatabaseTasks.send(:verbose?)
         end
+
+        # When we only have tenanted databases configured, we want to
+        # prevent the default Rails db tasks from running, since they
+        # will blow up with NoTenantError.
+        def wrap_rails_task(task_name, &should_run_original)
+          wrapped_rails_tasks[task_name] ||= begin
+            task = Rake::Task[task_name]
+            original_prerequisites = task.prerequisites.dup
+            original_actions = task.actions.dup
+            run_original = should_run_original || -> { true }
+
+            task.clear
+            task.enhance(original_prerequisites)
+            task.enhance do |t, args|
+              if run_original.call
+                original_actions.each { |action| action.call(t, args) }
+              end
+            end
+
+            true
+          end
+        end
+
+        private
+          def wrapped_rails_tasks
+            @wrapped_rails_tasks ||= {}
+          end
+
+          def default_database_tasks_present?
+            configs = ActiveRecord::Base.configurations
+            configs && configs.configs_for(env_name: Rails.env).any?
+          end
       end
 
       attr_reader :config
@@ -43,6 +75,17 @@ module ActiveRecord
         db_config = config.new_tenant_config(tenant)
         db_config.config_adapter.drop_database
         $stdout.puts "Dropped database '#{db_config.database}'" if verbose?
+      end
+
+      def rollback_all(step = 1)
+        tenants.each do |tenant|
+          rollback_tenant(tenant, step: step)
+        end
+      end
+
+      def rollback_tenant(tenant = set_current_tenant, step: 1)
+        db_config = config.new_tenant_config(tenant)
+        rollback(db_config, step: step)
       end
 
       def tenants
@@ -115,12 +158,37 @@ module ActiveRecord
         end
       end
 
+      def rollback(config, step:)
+        ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(config) do |conn|
+          pool = conn.pool
+
+          pool.migration_context.rollback(step)
+          pool.schema_cache.clear!
+
+          if Rails.env.development? || ENV["ARTENANT_SCHEMA_DUMP"].present?
+            ActiveRecord::Tasks::DatabaseTasks.dump_schema(config)
+
+            cache_dump = ActiveRecord::Tasks::DatabaseTasks.cache_dump_filename(config)
+            ActiveRecord::Tasks::DatabaseTasks.dump_schema_cache(pool, cache_dump)
+          end
+        end
+      end
+
       def verbose?
         self.class.verbose?
       end
 
       def register_rake_tasks
         name = config.name
+
+        self.class.wrap_rails_task("db:rollback") do
+          self.class.send(:default_database_tasks_present?)
+        end
+
+        step_from_env = -> {
+          step = ENV["STEP"]
+          step.present? ? step.to_i : 1
+        }
 
         desc "Migrate tenanted #{name} databases for current environment"
         task "db:migrate:#{name}" => "load_config" do
@@ -138,6 +206,24 @@ module ActiveRecord
         end
         task "db:migrate" => "db:migrate:#{name}"
         task "db:prepare" => "db:migrate:#{name}"
+
+        desc "Rollback tenanted #{name} databases for current environment"
+        task "db:rollback:#{name}" => "load_config" do
+          verbose_was = ActiveRecord::Migration.verbose
+          ActiveRecord::Migration.verbose = ActiveRecord::Tenanted::DatabaseTasks.verbose?
+
+          step = step_from_env.call
+          tenant = ENV["ARTENANT"]
+          
+          if tenant.present?
+            rollback_tenant(tenant, step: step)
+          else
+            rollback_all(step)
+          end
+        ensure
+          ActiveRecord::Migration.verbose = verbose_was
+        end
+        task "db:rollback" => "db:rollback:#{name}"
 
         desc "Drop tenanted #{name} databases for current environment"
         task "db:drop:#{name}" => "load_config" do

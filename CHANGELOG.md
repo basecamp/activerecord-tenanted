@@ -5,6 +5,11 @@
 ### Fixed
 
 - `.current_tenant = nil` now clears the tenant context, properly setting the shard to `UNTENANTED_SENTINEL` instead of `""` @flavorjones
+- Prevent `db:rollback` from raising `ActiveRecord::Tenanted::NoTenantError` when only tenanted databases are configured.
+
+### Added
+
+- Adds tenanted database rollback support via `ActiveRecord::Tenanted::DatabaseTasks#rollback_*` and the `db:rollback:DBNAME` rake task.
 
 
 ## v0.6.0 / 2025-11-05
