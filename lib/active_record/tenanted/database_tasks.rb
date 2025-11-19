@@ -11,6 +11,38 @@ module ActiveRecord
         def verbose?
           ActiveRecord::Tasks::DatabaseTasks.send(:verbose?)
         end
+
+        # When we only have tenanted databases configured, we want to
+        # prevent the default Rails db tasks from running, since they
+        # will blow up with NoTenantError.
+        def wrap_rails_task(task_name, &should_run_original)
+          wrapped_rails_tasks[task_name] ||= begin
+            task = Rake::Task[task_name]
+            original_prerequisites = task.prerequisites.dup
+            original_actions = task.actions.dup
+            run_original = should_run_original || -> { true }
+
+            task.clear
+            task.enhance(original_prerequisites)
+            task.enhance do |t, args|
+              if run_original.call
+                original_actions.each { |action| action.call(t, args) }
+              end
+            end
+
+            true
+          end
+        end
+
+        private
+          def wrapped_rails_tasks
+            @wrapped_rails_tasks ||= {}
+          end
+
+          def default_database_tasks_present?
+            configs = ActiveRecord::Base.configurations
+            configs && configs.configs_for(env_name: Rails.env).any?
+          end
       end
 
       attr_reader :config
@@ -149,6 +181,10 @@ module ActiveRecord
       def register_rake_tasks
         name = config.name
 
+        self.class.wrap_rails_task("db:rollback") do
+          self.class.send(:default_database_tasks_present?)
+        end
+
         step_from_env = -> {
           step = ENV["STEP"]
           step.present? ? step.to_i : 1
@@ -178,7 +214,7 @@ module ActiveRecord
 
           step = step_from_env.call
           tenant = ENV["ARTENANT"]
-
+          
           if tenant.present?
             rollback_tenant(tenant, step: step)
           else

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "rake"
 
 describe ActiveRecord::Tenanted::DatabaseTasks do
   describe ".migrate_tenant" do
@@ -183,6 +184,57 @@ describe ActiveRecord::Tenanted::DatabaseTasks do
           end
         end
       end
+    end
+  end
+
+  describe ".wrap_rails_task" do
+    setup do
+      @original_rake_application = Rake.application
+      Rake.application = Rake::Application.new
+      ActiveRecord::Tenanted::DatabaseTasks.instance_variable_set(:@wrapped_rails_tasks, nil)
+    end
+
+    teardown do
+      ActiveRecord::Tenanted::DatabaseTasks.instance_variable_set(:@wrapped_rails_tasks, nil)
+      Rake.application = @original_rake_application
+    end
+
+    test "skips the original task when the guard returns false" do
+      Rake::Task.define_task("db:rollback") { raise "should not run" }
+
+      ActiveRecord::Tenanted::DatabaseTasks.send(:wrap_rails_task, "db:rollback") { false }
+
+      Rake::Task["db:rollback"].invoke
+      assert(true)
+    end
+
+    test "runs the original task when the guard returns true" do
+      Rake::Task.define_task("db:rollback") { raise "original task ran" }
+
+      ActiveRecord::Tenanted::DatabaseTasks.send(:wrap_rails_task, "db:rollback") { true }
+
+      error = assert_raises(RuntimeError) { Rake::Task["db:rollback"].invoke }
+      assert_equal("original task ran", error.message)
+    end
+
+    test "guard skips original db:rollback when no default configurations exist" do
+      Rake::Task.define_task("db:rollback") { raise "should not run" }
+
+      fake_configs = Class.new do
+        def configs_for(...)
+          []
+        end
+      end.new
+
+      ActiveRecord::Base.stub(:configurations, fake_configs) do
+        ActiveRecord::Tenanted::DatabaseTasks.send(:wrap_rails_task, "db:rollback") do
+          ActiveRecord::Tenanted::DatabaseTasks.send(:default_database_tasks_present?)
+        end
+
+        Rake::Task["db:rollback"].invoke
+      end
+
+      assert(true)
     end
   end
 end
