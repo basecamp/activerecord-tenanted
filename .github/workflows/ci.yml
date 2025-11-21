@@ -50,6 +50,7 @@ jobs:
       - run: bin/test-unit
         env:
           MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: "3306"
 
   integration:
     runs-on: ubuntu-latest
@@ -75,3 +76,4 @@ jobs:
       - run: bin/test-integration
         env:
           MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: "3306"

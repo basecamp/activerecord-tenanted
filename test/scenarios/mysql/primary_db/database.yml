@@ -3,10 +3,10 @@ default: &default
   encoding: utf8mb4
   pool: 20
   max_connections: 20
-  username: root
-  password: devcontainer
-  host: <%= ENV.fetch('MYSQL_HOST', 'mysql') %>
-  port: 3306
+  username: <%= ENV.fetch('MYSQL_USERNAME', 'root') %>
+  password: <%= ENV.fetch('MYSQL_PASSWORD', 'devcontainer') %>
+  host: <%= ENV.fetch('MYSQL_HOST', '127.0.0.1') %>
+  port: <%= ENV.fetch('MYSQL_PORT', '3307') %>
   sslmode: disabled
 
 test:
