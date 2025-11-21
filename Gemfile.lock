@@ -177,6 +177,8 @@ GEM
     minitest (5.26.0)
     minitest-parallel_fork (2.1.0)
       minitest (>= 5.15.0)
+    mysql2 (0.5.7)
+      bigdecimal
     net-imap (0.5.12)
       date
       net-protocol
@@ -349,6 +351,7 @@ DEPENDENCIES
   importmap-rails
   jbuilder
   minitest-parallel_fork (= 2.1.0)
+  mysql2 (~> 0.5)
   propshaft
   puma (>= 5.0)
   rails!

@@ -613,21 +613,6 @@ describe ActiveRecord::Tenanted::Tenant do
         assert_not(TenantedApplicationRecord.tenant_exist?("doesnotexist"))
       end
 
-      test "it returns false if the tenant database is in the process of being migrated" do
-        # TODO: this test is SQLite-specific because it's using the Ready mutex directly.
-        config = TenantedApplicationRecord.tenanted_root_config
-        db_path = config.config_adapter.path_for(config.database_for("foo"))
-
-        assert_not(TenantedApplicationRecord.tenant_exist?("foo"))
-
-        ActiveRecord::Tenanted::Mutex::Ready.lock(db_path) do
-          assert_not(TenantedApplicationRecord.tenant_exist?("foo"))
-          FileUtils.touch(db_path) # pretend the database was created and migrated
-        end
-
-        assert(TenantedApplicationRecord.tenant_exist?("foo"))
-      end
-
       test "it returns true if the tenant database has been created" do
         TenantedApplicationRecord.create_tenant("foo")
 
@@ -646,10 +631,26 @@ describe ActiveRecord::Tenanted::Tenant do
         assert(TenantedApplicationRecord.tenant_exist?(12345678))
       end
     end
+
+    with_scenario("sqlite/primary_db", :primary_record) do
+      test "it returns false if the tenant database is in the process of being migrated" do
+        config = TenantedApplicationRecord.tenanted_root_config
+        db_path = config.config_adapter.path_for(config.database_for("foo"))
+
+        assert_not(TenantedApplicationRecord.tenant_exist?("foo"))
+
+        ActiveRecord::Tenanted::Mutex::Ready.lock(db_path) do
+          assert_not(TenantedApplicationRecord.tenant_exist?("foo"))
+          FileUtils.touch(db_path) # pretend the database was created and migrated
+        end
+
+        assert(TenantedApplicationRecord.tenant_exist?("foo"))
+      end
+    end
   end
 
   describe ".create_tenant" do
-    with_scenario(:primary_named_db, :primary_record) do
+    with_scenario("sqlite/primary_named_db", :primary_record) do
       describe "failed migration because database is readonly" do
         setup do
           db_config["test"]["tenanted"]["readonly"] = true
@@ -901,9 +902,10 @@ describe ActiveRecord::Tenanted::Tenant do
 
         assert_equal([ "bar" ], TenantedApplicationRecord.tenants)
       end
+    end
 
+    for_each_scenario(only: { adapter: :sqlite }) do
       test "it does not return tenants that are not ready" do
-        # TODO: this test is SQLite-specific because it's using the Ready mutex directly.
         config = TenantedApplicationRecord.tenanted_root_config
         db_path = config.config_adapter.path_for(config.database_for("foo"))
 

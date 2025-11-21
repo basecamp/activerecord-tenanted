@@ -24,6 +24,7 @@ end
 require_relative "../lib/active_record/tenanted"
 
 require_relative "dummy/config/environment"
+require "erb"
 require "minitest/spec"
 require "minitest/mock"
 
@@ -62,11 +63,16 @@ module ActiveRecord
           end
         end
 
-        def for_each_scenario(s = all_scenarios, except: {}, &block)
+        def for_each_scenario(s = all_scenarios, except: {}, only: {}, &block)
           s.each do |db_scenario, model_scenarios|
             with_db_scenario(db_scenario) do
               model_scenarios.each do |model_scenario|
+                scenario_name = db_scenario.to_s.split("/").last
+                adapter = db_scenario.to_s.include?("/") ? db_scenario.to_s.split("/").first.to_sym : nil
+
+                next if only.present? && only.dig(:adapter) != adapter
                 next if except[db_scenario.to_sym]&.include?(model_scenario.to_sym)
+                next if except[scenario_name.to_sym]&.include?(model_scenario.to_sym)
                 with_model_scenario(model_scenario, &block)
               end
             end
@@ -74,29 +80,51 @@ module ActiveRecord
         end
 
         def all_scenarios
-          Dir.glob(File.join(__dir__, "scenarios", "*", "database.yml"))
+          Dir.glob(File.join(__dir__, "scenarios", "*", "*", "database.yml"))
             .each_with_object({}) do |db_config_path, scenarios|
             db_config_dir = File.dirname(db_config_path)
+            db_adapter = File.basename(File.dirname(db_config_dir))
             db_scenario = File.basename(db_config_dir)
             model_files = Dir.glob(File.join(db_config_dir, "*.rb"))
 
-            scenarios[db_scenario] = model_files.map { File.basename(_1, ".*") }
+            scenarios["#{db_adapter}/#{db_scenario}"] = model_files.map { File.basename(_1, ".*") }
           end
         end
 
         def with_db_scenario(db_scenario, &block)
-          db_config_path = File.join(__dir__, "scenarios", db_scenario.to_s, "database.yml")
+          db_adapter, db_name = db_scenario.to_s.split("/", 2)
+
+          if db_name.nil?
+            db_name = db_adapter
+            matching_scenarios = all_scenarios.keys.select { |key| key.to_s.end_with?("/#{db_name}") }
+            raise "Could not find scenario: #{db_name}" if matching_scenarios.empty?
+
+            if matching_scenarios.size > 1
+              matching_scenarios.each do |scenario|
+                with_db_scenario(scenario, &block)
+              end
+              return
+            end
+
+            db_adapter, db_name = matching_scenarios.first.to_s.split("/", 2)
+          end
+
+          db_config_path = File.join(__dir__, "scenarios", db_adapter, db_name, "database.yml")
           raise "Could not find scenario db config: #{db_config_path}" unless File.exist?(db_config_path)
 
-          describe "scenario::#{db_scenario}" do
+          describe "scenario::#{db_adapter}/#{db_name}" do
             @db_config_dir = db_config_dir = File.dirname(db_config_path)
 
             let(:ephemeral_path) { Dir.mktmpdir("test-activerecord-tenanted-") }
             let(:storage_path) { File.join(ephemeral_path, "storage") }
             let(:db_path) { File.join(ephemeral_path, "db") }
-            let(:db_scenario) { db_scenario.to_sym }
-            let(:db_config_yml) { sprintf(File.read(db_config_path), storage: storage_path, db_path: db_path) }
-            let(:db_config) { YAML.load(db_config_yml) }
+            let(:db_adapter) { "#{db_adapter}" }
+            let(:db_scenario) { db_name.to_sym }
+            let(:db_config_yml) do
+              erb_content = ERB.new(File.read(db_config_path)).result(binding)
+              sprintf(erb_content, storage: storage_path, db_path: db_path)
+            end
+            let(:db_config) { YAML.load(db_config_yml, aliases: true) }
 
             setup do
               FileUtils.mkdir(db_path)
@@ -119,6 +147,8 @@ module ActiveRecord
             end
 
             teardown do
+              drop_shared_databases
+              drop_tentant_databases
               ActiveRecord::Migration.verbose = @migration_verbose_was
               ActiveRecord::Base.configurations = @old_configurations
               ActiveRecord::Tasks::DatabaseTasks.db_dir = @old_db_dir
@@ -199,7 +229,7 @@ module ActiveRecord
       end
 
       def all_configs
-        ActiveRecord::Base.configurations.configs_for(include_hidden: true)
+        ActiveRecord::Base.configurations.configs_for(env_name: "test", include_hidden: true)
       end
 
       def base_config
@@ -207,13 +237,17 @@ module ActiveRecord
       end
 
       def with_schema_dump_file
-        FileUtils.cp "test/scenarios/schema.rb",
-                     ActiveRecord::Tasks::DatabaseTasks.schema_dump_path(base_config)
+        Dir.glob("test/scenarios/*/schema.rb").each do |schema_file|
+          FileUtils.cp schema_file,
+            ActiveRecord::Tasks::DatabaseTasks.schema_dump_path(base_config)
+        end
       end
 
       def with_schema_cache_dump_file
-        FileUtils.cp "test/scenarios/schema_cache.yml",
-                     ActiveRecord::Tasks::DatabaseTasks.cache_dump_filename(base_config)
+        Dir.glob("test/scenarios/*/schema_cache.yml").each do |cache_file|
+          FileUtils.cp cache_file,
+            ActiveRecord::Tasks::DatabaseTasks.cache_dump_filename(base_config)
+        end
       end
 
       def with_new_migration_file
@@ -221,7 +255,7 @@ module ActiveRecord
       end
 
       def with_migration(file)
-        FileUtils.cp File.join("test", "scenarios", file), File.join(db_path, "tenanted_migrations")
+        FileUtils.cp File.join("test", "scenarios", db_adapter, file), File.join(db_path, "tenanted_migrations")
       end
 
       def assert_same_elements(expected, actual)
@@ -247,6 +281,30 @@ module ActiveRecord
       end
 
       private
+        def drop_shared_databases
+          shared_configs = all_configs.reject { |c| c.configuration_hash[:tenanted] || c.database.blank? }
+          return if shared_configs.empty?
+
+          shared_configs.each do |config|
+            ActiveRecord::Tasks::DatabaseTasks.drop(config)
+          rescue => e
+            Rails.logger.warn "Failed to cleanup shared database #{config.name}: #{e.message}"
+          end
+        end
+
+        def drop_tentant_databases
+          base_config = all_configs.find { |c| c.configuration_hash[:tenanted] }
+          tenants = base_config.tenants
+          return if tenants.empty?
+
+          tenants.each do |tenant_name|
+            adapter = base_config.new_tenant_config(tenant_name).config_adapter
+            adapter.drop_database
+          rescue => e
+            Rails.logger.warn "Failed to cleanup tenant database #{tenant_name}: #{e.message}"
+          end
+        end
+
         def create_fake_record
           # emulate models like ActiveStorage::Record that inherit directly from AR::Base
           Object.const_set(:FakeRecord, Class.new(ActiveRecord::Base))

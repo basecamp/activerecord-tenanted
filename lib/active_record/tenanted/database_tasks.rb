@@ -81,20 +81,30 @@ module ActiveRecord
 
       # This is essentially a simplified implementation of ActiveRecord::Tasks::DatabaseTasks.migrate
       def migrate(config)
+        unless config.config_adapter.database_exist?
+          config.config_adapter.create_database
+          $stdout.puts "Created database '#{config.database}'" if verbose?
+        end
+
         ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(config) do |conn|
           pool = conn.pool
 
-          # initialize_database
-          unless pool.schema_migration.table_exists?
+          begin
+            database_already_initialized = pool.schema_migration.table_exists?
+          rescue ActiveRecord::NoDatabaseError
+            database_already_initialized = false
+          end
+
+          unless database_already_initialized
             schema_dump_path = ActiveRecord::Tasks::DatabaseTasks.schema_dump_path(config)
             if schema_dump_path && File.exist?(schema_dump_path)
               ActiveRecord::Tasks::DatabaseTasks.load_schema(config)
             end
-            # TODO: emit a "Created database" message once we sort out implicit creation
           end
 
           # migrate
           migrated = false
+
           if pool.migration_context.pending_migration_versions.present?
             pool.migration_context.migrate(nil)
             pool.schema_cache.clear!
@@ -103,7 +113,7 @@ module ActiveRecord
 
           # dump the schema and schema cache
           if Rails.env.development? || ENV["ARTENANT_SCHEMA_DUMP"].present?
-            if migrated
+            if migrated || !database_already_initialized
               ActiveRecord::Tasks::DatabaseTasks.dump_schema(config)
             end
 
