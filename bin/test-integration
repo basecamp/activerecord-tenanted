@@ -93,6 +93,8 @@ def run_scenario(scenario)
      adapter_config = {"RAILS_ENV" => "test","ARTENANT_SCHEMA_DUMP" => "1"}
      if scenario[:adapter] == "mysql"
        adapter_config.merge!({ "MYSQL_UNIQUE_PREFIX" => db_prefix })
+     elsif scenario[:adapter] == "postgresql"
+       adapter_config.merge!({ "POSTGRES_UNIQUE_PREFIX" => db_prefix })
      end
 
       # Drop existing databases to ensure fresh setup

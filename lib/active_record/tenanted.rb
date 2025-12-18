@@ -7,6 +7,7 @@ loader = Zeitwerk::Loader.for_gem_extension(ActiveRecord)
 loader.inflector.inflect(
   "sqlite" => "SQLite",
   "mysql" => "MySQL",
+  "postgresql" => "PostgreSQL",
 )
 loader.setup
 

@@ -7,7 +7,7 @@ default: &default
   password: <%= ENV.fetch('MYSQL_PASSWORD', 'devcontainer') %>
   host: <%= ENV.fetch('MYSQL_HOST', '127.0.0.1') %>
   port: <%= ENV.fetch('MYSQL_PORT', '3307') %>
-  sslmode: disabled
+  ssl_mode: disabled
 
 test:
   tenanted:

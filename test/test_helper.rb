@@ -294,6 +294,8 @@ module ActiveRecord
 
         def drop_tentant_databases
           base_config = all_configs.find { |c| c.configuration_hash[:tenanted] }
+          return unless base_config
+
           tenants = base_config.tenants
           return if tenants.empty?
 

@@ -22,7 +22,15 @@ module ActiveRecord
           # Rails, and this gem's dependency has been bumped to require that version or later.
           config_adapter.ensure_database_directory_exists
 
-          super.tap { |connection| connection.tenant = tenant }
+          super.tap do |connection|
+            connection.tenant = tenant
+
+            # For PostgreSQL with schema-based tenancy, set the schema search path
+            if adapter == "postgresql" && configuration_hash[:schema_search_path]
+              schema = configuration_hash[:schema_search_path]
+              connection.execute("SET search_path TO #{connection.quote_table_name(schema)}")
+            end
+          end
         end
 
         def tenanted_config_name
