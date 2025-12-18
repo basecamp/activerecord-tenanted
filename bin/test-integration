@@ -27,6 +27,13 @@ scenarios = Dir.glob("test/scenarios/*/*db/*record.rb").map do |path|
   { adapter: adapter, database: database, models: models }
 end
 
+# Filter by adapter if ADAPTER environment variable is set
+if ENV["ADAPTER"]
+  adapter_filter = ENV["ADAPTER"].downcase
+  scenarios.select! { |s| s[:adapter] == adapter_filter }
+  abort("No scenarios found for adapter: #{adapter_filter}") if scenarios.empty?
+end
+
 COLOR_FG_BLUE = "\e[0;34m"
 COLOR_RESET = "\e[0m"
 
@@ -52,10 +59,16 @@ def run_scenario(scenario)
   puts "Creating integration app for #{COLOR_FG_BLUE}#{scenario}#{COLOR_RESET} at #{app_path}"
 
   # Generate a unique database prefix for this scenario to avoid conflicts
-  db_prefix = "test_#{scenario[:database]}_#{scenario[:models]}_#{Process.pid}".gsub(/[^a-zA-Z0-9_]/, "_")
+  # Use a very short prefix to avoid PostgreSQL's 63-character identifier limit
+  # Format: t<pid> (process ID is already unique enough for concurrent runs)
+  db_prefix = "t#{Process.pid}"
 
   # make a copy of the smarty app
   FileUtils.copy_entry(SMARTY_PATH, app_path)
+
+  # Set environment variables for ERB processing
+  ENV["POSTGRES_UNIQUE_PREFIX"] = db_prefix if scenario[:adapter] == "postgresql"
+  ENV["MYSQL_UNIQUE_PREFIX"] = db_prefix if scenario[:adapter] == "mysql"
 
   # generate database file
   database_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:adapter]}/#{scenario[:database]}/database.yml")
@@ -107,8 +120,9 @@ def run_scenario(scenario)
       File.exist?("db/#{prefix}schema.rb") || abort("Schema dump not generated")
       File.exist?("db/#{prefix}schema_cache.yml") || abort("Schema cache dump not generated")
 
-      # run in parallel half the time
-      env = if rand(2).zero?
+      # run in parallel half the time, but only when we're in parallel mode
+      #  (otherwise it can cause deadlocks with PostgreSQL)
+      env = if PARALLEL && rand(2).zero?
         { "PARALLEL_WORKERS" => "2" }
       else
         { "PARALLEL_WORKERS" => "1" }
