@@ -9,15 +9,14 @@ default: &default
   port: <%= ENV.fetch('POSTGRES_PORT', '5432') %>
 
 test:
+  primary:
+    <<: *default
+    tenanted: true
+    postgresql_strategy: database  # Use separate databases per tenant
+    database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_%%{tenant}
+    migrations_paths: "%{db_path}/tenanted_migrations"
   shared:
     <<: *default
     database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_shared
     migrations_paths: "%{db_path}/shared_migrations"
-  tenanted:
-    <<: *default
-    tenanted: true
-    postgresql_strategy: schema  # Explicit for test clarity (this is the default)
-    database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_%%{tenant}
-    migrations_paths: "%{db_path}/tenanted_migrations"
-
 

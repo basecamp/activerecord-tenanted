@@ -43,6 +43,9 @@ module ActiveRecord
     # Raised when an unsupported database adapter is used.
     class UnsupportedDatabaseError < Error; end
 
+    # Raised when database configuration is invalid or incompatible.
+    class ConfigurationError < Error; end
+
     # Return the constantized connection class configured in `config.active_record_tenanted.connection_class`,
     # or nil if none is configured.
     def self.connection_class

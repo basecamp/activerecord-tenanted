@@ -12,6 +12,7 @@ test:
   primary:
     <<: *default
     tenanted: true
+    postgresql_strategy: schema  # Explicit for test clarity (this is the default)
     database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_%%{tenant}
     migrations_paths: "%{db_path}/tenanted_migrations"
   shared:

@@ -27,7 +27,7 @@ module ActiveRecord
       register "sqlite3", "ActiveRecord::Tenanted::DatabaseAdapters::SQLite"
       register "trilogy", "ActiveRecord::Tenanted::DatabaseAdapters::MySQL"
       register "mysql2", "ActiveRecord::Tenanted::DatabaseAdapters::MySQL"
-      register "postgresql", "ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL"
+      register "postgresql", "ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory"
     end
   end
 end

@@ -272,6 +272,118 @@ class ApplicationRecord < ActiveRecord::Base
 end
 ```
 
+#### 2.2.1 PostgreSQL Multi-Tenancy Strategies
+
+PostgreSQL supports two isolation strategies, configurable via the `postgresql_strategy` option in `database.yml`.
+
+##### Schema-Based Multi-Tenancy (Default)
+
+Uses PostgreSQL schemas within a single database. This is the default strategy and is recommended for most use cases.
+
+**Configuration:**
+
+``` yaml
+production:
+  primary:
+    adapter: postgresql
+    tenanted: true
+    # postgresql_strategy: schema  # Optional - this is the default
+    database: myapp_%{tenant}
+    host: localhost
+```
+
+In this configuration:
+- A single PostgreSQL database named `myapp_tenanted` is created
+- Each tenant gets its own schema: `myapp_foo`, `myapp_bar`, etc.
+- The `schema_search_path` is set automatically to isolate tenants
+- All tables and data are stored within the tenant-specific schema
+
+**Advantages:**
+- **Resource Efficient**: Single database process serves all tenants
+- **Lower Memory Usage**: Shared buffer cache across tenants
+- **Simpler Backup**: One database to backup/restore
+- **Better for Scale**: Supports thousands of tenants efficiently
+- **PostgreSQL Best Practice**: Aligns with PostgreSQL's schema design
+
+**Considerations:**
+- Connection limits are shared across all tenants
+- Schema-level isolation (not database-level)
+- All tenants must use the same PostgreSQL version/settings
+
+##### Database-Based Multi-Tenancy
+
+Creates separate PostgreSQL databases for each tenant. Similar to how MySQL and SQLite work in this gem.
+
+**Configuration:**
+
+``` yaml
+production:
+  primary:
+    adapter: postgresql
+    tenanted: true
+    postgresql_strategy: database  # Explicitly use database-per-tenant
+    database: myapp_%{tenant}
+    host: localhost
+```
+
+In this configuration:
+- Each tenant gets its own PostgreSQL database: `myapp_foo`, `myapp_bar`, etc.
+- Each database has independent schemas, users, and settings
+- Complete isolation between tenants at the database level
+
+**Advantages:**
+- **Stronger Isolation**: Complete database-level separation
+- **Independent Configuration**: Each tenant can have different settings
+- **Easier Data Export**: Simple to dump/restore individual tenants
+- **Familiar Pattern**: Consistent with MySQL/SQLite behavior
+
+**Considerations:**
+- Higher resource usage (more database processes)
+- Higher memory usage (separate buffer cache per database)
+- More complex backup/restore operations
+- PostgreSQL may have limits on number of databases
+- Not recommended for hundreds of tenants
+
+##### Performance Comparison
+
+| Metric | Schema Strategy | Database Strategy |
+|--------|----------------|-------------------|
+| **Connection Overhead** | Low (single DB) | Medium (multiple DBs) |
+| **Memory Usage** | Low (shared cache) | High (cache per DB) |
+| **Query Performance** | Excellent | Excellent |
+| **Tenant Isolation** | Schema-level | Database-level |
+| **Backup/Restore** | Simple (one DB) | Complex (many DBs) |
+| **Tenant Limit** | Thousands | Hundreds |
+| **Resource Efficiency** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+| **Data Isolation** | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+
+##### Choosing a Strategy
+
+**Use Schema Strategy (default) when:**
+- You have many tenants (dozens to thousands)
+- Resource efficiency is important
+- You're following PostgreSQL best practices
+- Tenants share the same configuration needs
+- You want simpler operations (backup, monitoring, etc.)
+
+**Use Database Strategy when:**
+- You have few tenants (less than 100)
+- You need database-level isolation for compliance
+- Each tenant needs different database settings
+- You need to easily export individual tenant databases
+- You want consistency with MySQL/SQLite behavior
+
+##### Migration Between Strategies
+
+To change strategies, you'll need to:
+
+1. Export data from existing tenants
+2. Update `database.yml` with new `postgresql_strategy`
+3. Create new tenant databases/schemas
+4. Import data into new structure
+
+**Note:** There is no automated migration tool. Plan strategy choice carefully before production deployment.
+
 ### 2.3 Configuring `max_connection_pools`
 
 By default, Active Record Tenanted will cap the number of tenanted connection pools to 50. Setting a limit on the number of "live" connection pools at any one time provides control over the number of file descriptors used for database connections. For SQLite databases, it's also an important control on the amount of memory used.

@@ -296,14 +296,24 @@ module ActiveRecord
           base_config = all_configs.find { |c| c.configuration_hash[:tenanted] }
           return unless base_config
 
-          tenants = base_config.tenants
+          begin
+            tenants = base_config.tenants
+          rescue => e
+            # If we can't list tenants (e.g., database doesn't exist), that's fine
+            Rails.logger.debug "Could not list tenants for cleanup: #{e.message}"
+            return
+          end
+
           return if tenants.empty?
 
           tenants.each do |tenant_name|
-            adapter = base_config.new_tenant_config(tenant_name).config_adapter
+            # Use the tenant config's adapter for proper cleanup
+            tenant_config = base_config.new_tenant_config(tenant_name)
+            adapter = tenant_config.config_adapter
             adapter.drop_database
           rescue => e
-            Rails.logger.warn "Failed to cleanup tenant database #{tenant_name}: #{e.message}"
+            # Log warning but don't fail the teardown
+            warn "Failed to cleanup tenant database #{tenant_name}: #{e.class}: #{e.message}"
           end
         end
 

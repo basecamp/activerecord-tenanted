@@ -25,8 +25,8 @@ module ActiveRecord
           super.tap do |connection|
             connection.tenant = tenant
 
-            # For PostgreSQL with schema-based tenancy, set the schema search path
-            if adapter == "postgresql" && configuration_hash[:schema_search_path]
+            # Set schema search path if configured (used by PostgreSQL schema strategy)
+            if configuration_hash[:schema_search_path]
               schema = configuration_hash[:schema_search_path]
               connection.execute("SET search_path TO #{connection.quote_table_name(schema)}")
             end

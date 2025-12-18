@@ -161,7 +161,7 @@ describe ActiveRecord::Tenanted::Tenant do
       end
     end
 
-    for_each_scenario(except: { primary_db: [ :subtenant_record ] }) do
+    for_each_scenario(except: { primary_db: [ :subtenant_record ], primary_db_database_strategy: [ :subtenant_record ] }) do
       describe "concrete classes" do
         test "concrete classes can call current_tenant=" do
           TenantedApplicationRecord.current_tenant = "foo"
@@ -333,7 +333,7 @@ describe ActiveRecord::Tenanted::Tenant do
       end
     end
 
-    for_each_scenario(except: { primary_db: [ :subtenant_record ] }) do
+    for_each_scenario(except: { primary_db: [ :subtenant_record ], primary_db_database_strategy: [ :subtenant_record ] }) do
       setup do
         TenantedApplicationRecord.create_tenant("foo")
         TenantedApplicationRecord.create_tenant("bar")

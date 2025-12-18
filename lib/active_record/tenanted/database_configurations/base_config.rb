@@ -51,19 +51,15 @@ module ActiveRecord
           config_hash = configuration_hash.dup.tap do |hash|
             hash[:tenant] = tenant_name
 
-            # For PostgreSQL, use schema-based multi-tenancy
-            if adapter == "postgresql"
-              # Keep the same database, but set schema_search_path
-              # The database pattern like "test_%{tenant}" becomes the schema name
-              schema_name = database_for(tenant_name)
-              hash[:schema_search_path] = schema_name
-              # Store the schema name for the adapter to use
-              hash[:tenant_schema] = schema_name
-              # Use a consistent base database name
-              hash[:database] = database.gsub(/%\{tenant\}/, "tenanted")
-            else
-              # For other adapters, use database-per-tenant
-              hash[:database] = database_for(tenant_name)
+            # All adapters handle their own database naming
+            hash[:database] = database_for(tenant_name)
+
+            # Store tenant-specific database/schema name for adapters that need it
+            hash[:tenant_database] = database_for(tenant_name)
+
+            # Allow adapter to modify config hash (for PostgreSQL schema strategy)
+            if config_adapter.respond_to?(:prepare_tenant_config_hash)
+              hash.merge!(config_adapter.prepare_tenant_config_hash(hash, self, tenant_name))
             end
 
             hash[:tenanted_config_name] = name
