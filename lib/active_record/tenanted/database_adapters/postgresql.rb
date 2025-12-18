@@ -73,9 +73,8 @@ module ActiveRecord
           return if schema_name.include?("%{") || schema_name.include?("%}")
 
           # PostgreSQL identifier max length is 63 bytes
-          # We validate against >= 63 to be conservative and match existing test expectations
-          if schema_name.length >= 63
-            raise ActiveRecord::Tenanted::BadTenantNameError, "Schema name too long (max 62 characters to be safe): #{schema_name.inspect}"
+          if schema_name.length > 63
+            raise ActiveRecord::Tenanted::BadTenantNameError, "Schema name too long (max 63 characters): #{schema_name.inspect}"
           end
 
           # Schema names can contain letters, numbers, underscores, dollar signs, and hyphens
@@ -97,8 +96,13 @@ module ActiveRecord
 
           with_base_connection do |connection|
             quoted_schema = connection.quote_table_name(schema)
+
             # Create the schema (our patch makes this idempotent with IF NOT EXISTS)
             connection.execute("CREATE SCHEMA IF NOT EXISTS #{quoted_schema}")
+
+            # Commit any pending transaction to ensure schema is visible to other connections
+            # with_temporary_connection may wrap DDL in a transaction
+            connection.commit_db_transaction if connection.transaction_open?
 
             # Grant usage permissions (optional but good practice)
             # This ensures the schema can be used by the current user

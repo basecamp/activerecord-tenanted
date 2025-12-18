@@ -46,12 +46,21 @@ describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL do
     end
 
     test "raises error for database names that are too long" do
-      # Max is 63 characters, so with "myapp_" prefix (7 chars), tenant name can be max 56 chars
-      long_name = "a" * 57
+      # Max is 63 characters, so with "myapp_" prefix (6 chars), tenant name can be max 57 chars
+      # Testing with 58 chars should fail (6 + 58 = 64 > 63)
+      long_name = "a" * 58
       error = assert_raises(ActiveRecord::Tenanted::BadTenantNameError) do
         adapter.validate_tenant_name(long_name)
       end
       assert_match(/too long/, error.message)
+    end
+
+    test "allows database names at exactly 63 characters" do
+      # With "myapp_" prefix (6 chars), tenant name of 57 chars = exactly 63 total
+      max_length_name = "a" * 57
+      assert_nothing_raised do
+        adapter.validate_tenant_name(max_length_name)
+      end
     end
 
     test "raises error for database names with invalid characters" do
