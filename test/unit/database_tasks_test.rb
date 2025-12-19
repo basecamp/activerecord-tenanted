@@ -50,7 +50,7 @@ describe ActiveRecord::Tenanted::DatabaseTasks do
       end
 
       test "drops colocated base database when using schema strategy" do
-        skip unless base_config.config_adapter.respond_to?(:drop_colocated_database)
+        skip unless base_config.config_adapter.respond_to?(:colocated?)
 
         # Get the base database name
         base_db_name = base_config.config_adapter.send(:extract_base_database_name)

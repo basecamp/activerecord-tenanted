@@ -33,10 +33,17 @@ module ActiveRecord
         migrate(db_config)
       end
 
+      def create_all
+        # For colocated strategies, create the shared database that will contain all tenants
+        # (e.g., PostgreSQL schema strategy creates a single base database for all schemas)
+        # For isolated strategies, individual databases are created on-demand via migrate_tenant
+        config.config_adapter.create_colocated_database if adapter_colocated?
+      end
+
       def drop_all
-        # Check if the adapter is colocated and we can drop the entire database
-        # (e.g., PostgreSQL schema strategy)
-        if config.config_adapter.respond_to?(:drop_colocated_database)
+        # For colocated strategies, drop the shared database containing all tenants
+        # For isolated strategies, drop each tenant database individually
+        if adapter_colocated?
           config.config_adapter.drop_colocated_database
         else
           tenants.each do |tenant|
@@ -138,6 +145,12 @@ module ActiveRecord
       def register_rake_tasks
         name = config.name
 
+        desc "Create tenanted #{name} databases for current environment"
+        task "db:create:#{name}" => "load_config" do
+          create_all
+        end
+        task "db:create" => "db:create:#{name}"
+
         desc "Migrate tenanted #{name} databases for current environment"
         task "db:migrate:#{name}" => "load_config" do
           verbose_was = ActiveRecord::Migration.verbose
@@ -176,6 +189,11 @@ module ActiveRecord
         task "db:reset:#{name}" => [ "db:drop:#{name}", "db:migrate:#{name}" ]
         task "db:reset" => "db:reset:#{name}"
       end
+
+      private
+        def adapter_colocated?
+          config.config_adapter.respond_to?(:colocated?) && config.config_adapter.colocated?
+        end
     end
   end
 end

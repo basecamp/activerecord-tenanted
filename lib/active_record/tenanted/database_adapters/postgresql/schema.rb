@@ -21,6 +21,8 @@ module ActiveRecord
         # - Create/use schemas like "tenant_foo", "tenant_bar", etc.
         # - Set schema_search_path to isolate tenants
         class Schema < Base
+          include Colocated
+
           def tenant_databases
             # Query for all schemas matching the pattern
             schema_pattern = schema_name_for("%")
@@ -94,9 +96,30 @@ module ActiveRecord
             end
           end
 
+          def create_colocated_database
+            # Create the colocated database that will contain all tenant schemas.
+            # Use Rails' DatabaseTasks.create to fully integrate with Rails
+            base_db_name = extract_base_database_name
+
+            # Create a non-tenanted database config for the base database
+            # We strip out tenanted-specific keys to create a regular Rails
+            # config Rails' create method will handle connection, logging, etc.
+            base_config_hash = db_config.configuration_hash
+              .except(:tenanted, :tenant_schema, :schema_search_path)
+              .merge(database: base_db_name)
+
+            base_create_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(
+              db_config.env_name,
+              db_config.name,
+              base_config_hash
+            )
+
+            ActiveRecord::Tasks::DatabaseTasks.create(base_create_config)
+          end
+
           def drop_colocated_database
-            # For schema-based strategies we want to, drop the entire colocated database
-            # using Rails' DatabaseTasks.drop to fully integrate with Rails
+            # Drop the entire colocated database using Rails' DatabaseTasks.drop
+            # to fully integrate with Rails
             base_db_name = extract_base_database_name
 
             # Create a non-tenanted database config for the base database
