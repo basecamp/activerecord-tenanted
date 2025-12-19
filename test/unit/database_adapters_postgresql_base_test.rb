@@ -123,6 +123,13 @@ describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Base do
         adapter.validate_tenant_name("(.+)")
       end
     end
+
+    test "raises error for tenant names with forward slashes" do
+      error = assert_raises(ActiveRecord::Tenanted::BadTenantNameError) do
+        adapter.validate_tenant_name("myapp/tenant")
+      end
+      assert_match(/invalid characters/, error.message)
+    end
   end
 
   describe "database_ready?" do

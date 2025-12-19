@@ -384,6 +384,38 @@ To change strategies, you'll need to:
 
 **Note:** There is no automated migration tool. Plan strategy choice carefully before production deployment.
 
+##### PostgreSQL Tenant Name Constraints
+
+PostgreSQL has strict naming conventions for identifiers (database names and schema names). When using PostgreSQL with this gem, tenant names are subject to the following constraints:
+
+**Allowed Characters:**
+- Letters (a-z, A-Z)
+- Numbers (0-9)
+- Underscores (`_`)
+- Dollar signs (`$`)
+- Hyphens (`-`)
+
+**Additional Constraints:**
+- **Maximum Length:** 63 characters total (including any database prefix)
+- **First Character:** Must be a letter or underscore (cannot start with a number or special character)
+- **Forward Slashes:** Not allowed in PostgreSQL identifiers
+
+**Examples:**
+
+✅ **Valid tenant names:**
+- `"tenant-one"`
+- `"tenant_one"`
+- `"tenant123"`
+- `"$tenant"`
+- `"_tenant"`
+
+❌ **Invalid tenant names:**
+- `"tenant.name"` (contains dot)
+- `"tenant name"` (contains space)
+- `"123tenant"` (starts with number)
+- `"tenant@domain"` (contains @ symbol)
+- `"my-org/tenant"` (contains forward slash)
+
 ### 2.3 Configuring `max_connection_pools`
 
 By default, Active Record Tenanted will cap the number of tenanted connection pools to 50. Setting a limit on the number of "live" connection pools at any one time provides control over the number of file descriptors used for database connections. For SQLite databases, it's also an important control on the amount of memory used.
