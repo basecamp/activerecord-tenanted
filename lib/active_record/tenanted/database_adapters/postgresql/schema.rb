@@ -94,6 +94,27 @@ module ActiveRecord
             end
           end
 
+          def drop_colocated_database
+            # For schema-based strategies we want to, drop the entire colocated database
+            # using Rails' DatabaseTasks.drop to fully integrate with Rails
+            base_db_name = extract_base_database_name
+
+            # Create a non-tenanted database config for the base database
+            # We strip out tenanted-specific keys to create a regular Rails config
+            # Rails' drop method will handle connection, termination, logging, etc.
+            base_config_hash = db_config.configuration_hash
+              .except(:tenanted, :tenant_schema, :schema_search_path)
+              .merge(database: base_db_name)
+
+            base_drop_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(
+              db_config.env_name,
+              db_config.name,
+              base_config_hash
+            )
+
+            ActiveRecord::Tasks::DatabaseTasks.drop(base_drop_config)
+          end
+
           def database_exist?
             # Check if schema exists
             schema = database_path

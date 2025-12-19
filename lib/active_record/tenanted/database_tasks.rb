@@ -34,8 +34,14 @@ module ActiveRecord
       end
 
       def drop_all
-        tenants.each do |tenant|
-          drop_tenant(tenant)
+        # Check if the adapter is colocated and we can drop the entire database
+        # (e.g., PostgreSQL schema strategy)
+        if config.config_adapter.respond_to?(:drop_colocated_database)
+          config.config_adapter.drop_colocated_database
+        else
+          tenants.each do |tenant|
+            drop_tenant(tenant)
+          end
         end
       end
 

@@ -39,6 +39,45 @@ describe ActiveRecord::Tenanted::DatabaseTasks do
         end
       end
     end
+
+    for_each_scenario only: { adapter: :postgresql } do
+      let(:tenants) { %w[foo bar] }
+
+      setup do
+        tenants.each do |tenant|
+          TenantedApplicationRecord.create_tenant(tenant)
+        end
+      end
+
+      test "drops colocated base database when using schema strategy" do
+        skip unless base_config.config_adapter.respond_to?(:drop_colocated_database)
+
+        # Get the base database name
+        base_db_name = base_config.config_adapter.send(:extract_base_database_name)
+
+        # Verify base database exists
+        maintenance_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(
+          base_config.env_name,
+          "_test_maint",
+          base_config.configuration_hash.dup.merge(database: "postgres", database_tasks: false)
+        )
+
+        base_db_exists = -> do
+          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(maintenance_config) do |conn|
+            result = conn.execute("SELECT 1 FROM pg_database WHERE datname = '#{conn.quote_string(base_db_name)}'")
+            result.any?
+          end
+        end
+
+        assert base_db_exists.call, "Base database #{base_db_name} should exist before drop_all"
+
+        # Drop all databases
+        ActiveRecord::Tenanted::DatabaseTasks.new(base_config).drop_all
+
+        # Verify base database was dropped
+        assert_not base_db_exists.call, "Base database #{base_db_name} should be dropped after drop_all"
+      end
+    end
   end
 
   describe ".migrate_tenant" do

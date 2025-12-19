@@ -63,4 +63,21 @@ describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema do
       assert_equal "myapp_foo", result
     end
   end
+
+  describe "drop_colocated_database" do
+    test "delegates to Rails DatabaseTasks.drop with base database config" do
+      # This test verifies that drop_colocated_database fully integrates with Rails
+      adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(db_config)
+      base_db_name = "myapp_tenanted"
+
+      # Verify DatabaseTasks.drop is called with the correct config
+      ActiveRecord::Tasks::DatabaseTasks.stub :drop, ->(config) do
+        assert_equal base_db_name, config.database
+        assert_equal "test", config.env_name
+        assert_equal "postgresql", config.configuration_hash[:adapter]
+      end do
+        adapter.drop_colocated_database
+      end
+    end
+  end
 end
