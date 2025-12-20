@@ -828,6 +828,52 @@ describe ActiveRecord::Tenanted::Tenant do
           end
         end
       end
+
+      test "does not raise PendingMigrationError during tenant creation" do
+        # This test ensures that the schema version check is properly disabled
+        # during tenant creation, preventing PendingMigrationError from being
+        # raised when the tenant schema is first being set up
+        assert_nothing_raised do
+          TenantedApplicationRecord.create_tenant("foo")
+        end
+
+        # Verify the tenant was created and migrations were run
+        assert(TenantedApplicationRecord.tenant_exist?("foo"))
+
+        version = TenantedApplicationRecord.with_tenant("foo") do
+          User.connection_pool.migration_context.current_version
+        end
+
+        # Verify at least one migration was run
+        assert_operator(version, :>, 0)
+      end
+
+      test "thread-local schema version check flag is properly cleaned up" do
+        # Ensure the thread-local flag is not set before tenant creation
+        assert_nil(Thread.current[:ar_tenanted_skip_schema_check])
+
+        TenantedApplicationRecord.create_tenant("foo")
+
+        # Ensure the thread-local flag is cleaned up after tenant creation
+        assert_equal(false, Thread.current[:ar_tenanted_skip_schema_check])
+      end
+
+      test "schema version check is enforced after tenant creation" do
+        # Create a tenant
+        TenantedApplicationRecord.create_tenant("foo") do
+          # Force removal of connection pool to trigger recreation
+          TenantedApplicationRecord.remove_connection
+        end
+
+        # Add a new migration file to simulate pending migrations
+        with_new_migration_file
+
+        # Accessing the tenant should now raise PendingMigrationError
+        # because schema version check is re-enabled
+        assert_raises(ActiveRecord::PendingMigrationError) do
+          TenantedApplicationRecord.with_tenant("foo") { User.count }
+        end
+      end
     end
   end
 
