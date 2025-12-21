@@ -12,10 +12,11 @@ test:
   primary:
     <<: *default
     tenanted: true
-    database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_colocated
-    schema_name_pattern: "%%{tenant}"
+    database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>
+    schema_name_pattern: "%{tenant}"
     migrations_paths: "%{db_path}/tenanted_migrations"
   shared:
     <<: *default
-    database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_colocated_shared
+    database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_shared
     migrations_paths: "%{db_path}/shared_migrations"
+
