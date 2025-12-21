@@ -25,6 +25,11 @@ module ActiveRecord
         class Schema < Base
           include Colocated
 
+          def initialize(db_config)
+            super
+            validate_configuration
+          end
+
           def tenant_databases
             # Query for all schemas matching the pattern
             schema_pattern = schema_name_for("%")
@@ -271,6 +276,18 @@ module ActiveRecord
             # Generate schema name from tenant name
             # Delegate to identifier_for for consistency
             identifier_for(tenant_name)
+          end
+
+        private
+          def validate_configuration
+            # Validate that we don't have conflicting configuration
+            if db_config.database.include?("%{tenant}") && db_config.configuration_hash[:schema_name_pattern]
+              raise ActiveRecord::Tenanted::ConfigurationError,
+                "Cannot specify both a dynamic database name with '%{tenant}' pattern and " \
+                "schema_name_pattern for PostgreSQL schema strategy. " \
+                "Use either: 1) static database name with schema_name_pattern, or " \
+                "2) dynamic database name without schema_name_pattern."
+            end
           end
         end
       end

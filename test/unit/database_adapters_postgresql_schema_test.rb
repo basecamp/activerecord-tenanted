@@ -9,6 +9,20 @@ describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema do
   end
   let(:adapter) { ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(db_config) }
 
+  describe "initialization" do
+    test "raises error when both dynamic database name and schema_name_pattern are specified" do
+      invalid_config_hash = { adapter: "postgresql", database: "myapp_%{tenant}", schema_name_pattern: "%{tenant}" }
+      invalid_db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("test", "primary", invalid_config_hash)
+
+      error = assert_raises(ActiveRecord::Tenanted::ConfigurationError) do
+        ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(invalid_db_config)
+      end
+
+      expected_message = "Cannot specify both a dynamic database name with '%{tenant}' pattern and schema_name_pattern for PostgreSQL schema strategy"
+      assert error.message.include?(expected_message)
+    end
+  end
+
   describe "database_path" do
     test "returns tenant_schema from config if present" do
       db_config_with_schema = Object.new
@@ -22,7 +36,12 @@ describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema do
     end
 
     test "returns database pattern if tenant_schema not present" do
-      assert_equal "myapp_%{tenant}", adapter.database_path
+      db_config_dynamic = Object.new
+      def db_config_dynamic.database; "myapp_%{tenant}"; end
+      def db_config_dynamic.configuration_hash; {}; end
+
+      adapter_dynamic = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(db_config_dynamic)
+      assert_equal "myapp_%{tenant}", adapter_dynamic.database_path
     end
   end
 
@@ -112,7 +131,13 @@ describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema do
 
   describe "identifier_for" do
     test "returns schema name for tenant" do
-      result = adapter.identifier_for("foo")
+      # Test without schema_name_pattern to use base behavior
+      db_config_without_pattern = Object.new
+      def db_config_without_pattern.database; "myapp_%{tenant}"; end
+      def db_config_without_pattern.configuration_hash; {}; end
+
+      adapter_without_pattern = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(db_config_without_pattern)
+      result = adapter_without_pattern.identifier_for("foo")
       assert_equal "myapp_foo", result
     end
 
@@ -150,7 +175,13 @@ describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema do
   describe "create_colocated_database" do
     test "delegates to Rails DatabaseTasks.create with base database config" do
       # This test verifies that create_colocated_database fully integrates with Rails
-      adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(db_config)
+      db_config_dynamic = Object.new
+      def db_config_dynamic.database; "myapp_%{tenant}"; end
+      def db_config_dynamic.configuration_hash; { adapter: "postgresql" }; end
+      def db_config_dynamic.env_name; "test"; end
+      def db_config_dynamic.name; "primary"; end
+
+      adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(db_config_dynamic)
       base_db_name = "myapp_tenanted"
 
       # Verify DatabaseTasks.create is called with the correct config
@@ -188,7 +219,13 @@ describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema do
   describe "drop_colocated_database" do
     test "delegates to Rails DatabaseTasks.drop with base database config" do
       # This test verifies that drop_colocated_database fully integrates with Rails
-      adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(db_config)
+      db_config_dynamic = Object.new
+      def db_config_dynamic.database; "myapp_%{tenant}"; end
+      def db_config_dynamic.configuration_hash; { adapter: "postgresql" }; end
+      def db_config_dynamic.env_name; "test"; end
+      def db_config_dynamic.name; "primary"; end
+
+      adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(db_config_dynamic)
       base_db_name = "myapp_tenanted"
 
       # Verify DatabaseTasks.drop is called with the correct config

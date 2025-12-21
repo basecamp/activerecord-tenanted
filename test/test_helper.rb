@@ -122,7 +122,7 @@ module ActiveRecord
             let(:db_scenario) { db_name.to_sym }
             let(:db_config_yml) do
               erb_content = ERB.new(File.read(db_config_path)).result(binding)
-              sprintf(erb_content, storage: storage_path, db_path: db_path)
+              sprintf(erb_content, storage: storage_path, db_path: db_path, tenant: "%{tenant}")
             end
             let(:db_config) { YAML.load(db_config_yml, aliases: true) }
 
