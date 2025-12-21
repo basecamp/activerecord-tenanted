@@ -4,81 +4,35 @@ require "test_helper"
 
 describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory do
   describe "strategy selection" do
-    test "returns Schema adapter when strategy is 'schema'" do
-      config_hash = { adapter: "postgresql", database: "test_%{tenant}", postgresql_strategy: "schema" }
-      db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("test", "primary", config_hash)
-
-      adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.new(db_config)
-
-      assert_instance_of ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema, adapter
-    end
-
-    test "returns Database adapter when strategy is 'database'" do
-      config_hash = { adapter: "postgresql", database: "test_%{tenant}", postgresql_strategy: "database" }
-      db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("test", "primary", config_hash)
-
-      adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.new(db_config)
-
-      assert_instance_of ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Database, adapter
-    end
-
-    test "returns Schema adapter when strategy is not specified (default)" do
+    test "returns Database adapter when schema_name_pattern is not set" do
       config_hash = { adapter: "postgresql", database: "test_%{tenant}" }
       db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("test", "primary", config_hash)
 
       adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.new(db_config)
 
-      assert_instance_of ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema, adapter
+      assert_instance_of ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Database, adapter
     end
 
-    test "raises error for invalid strategy" do
-      config_hash = { adapter: "postgresql", database: "test_%{tenant}", postgresql_strategy: "invalid" }
-      db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("test", "primary", config_hash)
-
-      error = assert_raises(ActiveRecord::Tenanted::UnsupportedDatabaseError) do
-        ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.new(db_config)
-      end
-
-      assert_match(/Invalid PostgreSQL strategy/, error.message)
-      assert_match(/"invalid"/, error.message)
-      assert_match(/Valid options are/, error.message)
-    end
-
-    test "suggests correct strategy for typos" do
-      config_hash = { adapter: "postgresql", database: "test_%{tenant}", postgresql_strategy: "schemas" }
-      db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("test", "primary", config_hash)
-
-      error = assert_raises(ActiveRecord::Tenanted::UnsupportedDatabaseError) do
-        ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.new(db_config)
-      end
-
-      assert_match(/Did you mean "schema"\?/, error.message)
-    end
-
-    test "handles strategy as symbol" do
-      config_hash = { adapter: "postgresql", database: "test_%{tenant}", postgresql_strategy: :database }
+    test "auto-detects Schema strategy when schema_name_pattern is present" do
+      config_hash = { adapter: "postgresql", database: "myapp_production", schema_name_pattern: "%{tenant}" }
       db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("test", "primary", config_hash)
 
       adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.new(db_config)
 
-      assert_instance_of ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Database, adapter
-    end
-  end
-
-  describe "suggest_strategy" do
-    test "suggests 'schema' for 'schemas'" do
-      suggestion = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.suggest_strategy("schemas")
-      assert_equal "schema", suggestion
+      assert_instance_of ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema, adapter
     end
 
-    test "suggests 'database' for 'databases'" do
-      suggestion = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.suggest_strategy("databases")
-      assert_equal "database", suggestion
-    end
+    test "works with complex schema_name_pattern" do
+      config_hash = {
+        adapter: "postgresql",
+        database: "rails_backend_development",
+        schema_name_pattern: "tenant_%{tenant}",
+      }
+      db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new("test", "primary", config_hash)
 
-    test "suggests closest match for completely wrong input" do
-      suggestion = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.suggest_strategy("xyz")
-      assert_includes [ "schema", "database" ], suggestion
+      adapter = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Factory.new(db_config)
+
+      assert_instance_of ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema, adapter
     end
   end
 end

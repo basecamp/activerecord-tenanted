@@ -10,15 +10,17 @@ module ActiveRecord
         # separate schemas within a single PostgreSQL database. This is more efficient
         # and aligns with PostgreSQL best practices.
         #
-        # Configuration example:
+        # Configuration examples:
+        #
+        # Colocated approach (recommended):
         #   adapter: postgresql
         #   tenanted: true
-        #   postgresql_strategy: schema  # or omit (this is the default)
-        #   database: tenant_%{tenant}   # This becomes the schema name
+        #   database: myapp_production
+        #   schema_name_pattern: "%{tenant}"  # Creates schemas: account-123, account-456, etc.
         #
         # The adapter will:
         # - Connect to a single base database
-        # - Create/use schemas like "tenant_foo", "tenant_bar", etc.
+        # - Create/use schemas for tenant isolation
         # - Set schema_search_path to isolate tenants
         class Schema < Base
           include Colocated
@@ -163,13 +165,31 @@ module ActiveRecord
 
           # Prepare tenant config hash with schema-specific settings
           def prepare_tenant_config_hash(config_hash, base_config, tenant_name)
-            schema_name = base_config.database_for(tenant_name)
+            # If schema_name_pattern is provided, use it for schema names
+            # Otherwise fall back to database pattern (original behavior)
+            if base_config.configuration_hash[:schema_name_pattern]
+              schema_name = sprintf(base_config.configuration_hash[:schema_name_pattern], tenant: tenant_name.to_s)
+              database_name = extract_base_database_name
+            else
+              schema_name = base_config.database_for(tenant_name)
+              database_name = base_config.database.gsub(/%\{tenant\}/, "tenanted")
+            end
 
             config_hash.merge(
               schema_search_path: schema_name,
               tenant_schema: schema_name,
-              database: base_config.database.gsub(/%\{tenant\}/, "tenanted")
+              database: database_name
             )
+          end
+
+          def identifier_for(tenant_name)
+            # Override base class to use schema_name_pattern if provided
+            if db_config.configuration_hash[:schema_name_pattern]
+              sprintf(db_config.configuration_hash[:schema_name_pattern], tenant: tenant_name.to_s)
+            else
+              # Fall back to base class behavior
+              super
+            end
           end
 
         private
@@ -237,17 +257,20 @@ module ActiveRecord
           end
 
           def extract_base_database_name
-            # Extract base database name from the pattern
-            # For "test_%{tenant}" (after YAML loading) we need a consistent database name
-            # We'll use the pattern with "tenanted" as the suffix
-            # This gives us something like "test_tenanted"
-            db_config.database.gsub(/%\{tenant\}/, "tenanted")
+            # Extract base database name
+            # If schema_name_pattern is provided, the database name is already static
+            # Otherwise, replace %{tenant} with "tenanted" for the base database
+            if db_config.configuration_hash[:schema_name_pattern]
+              db_config.database
+            else
+              db_config.database.gsub(/%\{tenant\}/, "tenanted")
+            end
           end
 
           def schema_name_for(tenant_name)
-            # Generate schema name from tenant name using the database pattern
-            # For pattern like "tenant_%{tenant}", this becomes "tenant_foo"
-            sprintf(db_config.database, tenant: tenant_name.to_s)
+            # Generate schema name from tenant name
+            # Delegate to identifier_for for consistency
+            identifier_for(tenant_name)
           end
         end
       end

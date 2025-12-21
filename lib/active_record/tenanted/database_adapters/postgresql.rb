@@ -11,11 +11,8 @@ module ActiveRecord
       # PostgreSQL adapter support for multi-tenancy
       #
       # Supports two strategies:
-      # - Schema-based (default): Multiple schemas within a single database
-      # - Database-based: Separate databases per tenant
-      #
-      # Configure strategy in database.yml:
-      #   postgresql_strategy: schema  # or "database"
+      # - Schema-based (preferred): Multiple schemas within a single database
+      # - Database-based (default): Separate databases per tenant
       module PostgreSQL
       end
     end

@@ -16,7 +16,6 @@ test:
   tenanted:
     <<: *default
     tenanted: true
-    postgresql_strategy: database  # Use separate databases per tenant
     database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_%%{tenant}
     migrations_paths: "%{db_path}/tenanted_migrations"
 

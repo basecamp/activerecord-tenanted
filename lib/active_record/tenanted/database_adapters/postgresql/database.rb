@@ -12,7 +12,6 @@ module ActiveRecord
         # Configuration example:
         #   adapter: postgresql
         #   tenanted: true
-        #   postgresql_strategy: database
         #   database: myapp_%{tenant}
         #
         # The adapter will:
@@ -128,14 +127,14 @@ module ActiveRecord
             if db_config.configuration_hash.key?(:schema_search_path)
               raise ActiveRecord::Tenanted::ConfigurationError,
                 "PostgreSQL database strategy does not use `schema_search_path`. " \
-                "Remove this configuration, or use `postgresql_strategy: schema` " \
+                "Remove this configuration, or use `schema_name_pattern` " \
                 "if you want schema-based multi-tenancy."
             end
 
             if db_config.configuration_hash.key?(:tenant_schema)
               raise ActiveRecord::Tenanted::ConfigurationError,
                 "PostgreSQL database strategy does not use `tenant_schema`. " \
-                "Remove this configuration, or use `postgresql_strategy: schema` " \
+                "Remove this configuration, or use `schema_name_pattern` " \
                 "if you want schema-based multi-tenancy."
             end
           end

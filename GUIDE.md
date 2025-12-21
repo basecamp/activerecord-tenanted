@@ -274,9 +274,9 @@ end
 
 #### 2.2.1 PostgreSQL Multi-Tenancy Strategies
 
-PostgreSQL supports two isolation strategies, configurable via the `postgresql_strategy` option in `database.yml`.
+PostgreSQL supports two isolation strategies, configurable via the `schema_name_pattern` option in `database.yml`.
 
-##### Schema-Based Multi-Tenancy (Default)
+##### Schema-Based Multi-Tenancy
 
 Uses PostgreSQL schemas within a single database. This is the default strategy and is recommended for most use cases.
 
@@ -287,16 +287,17 @@ production:
   primary:
     adapter: postgresql
     tenanted: true
-    # postgresql_strategy: schema  # Optional - this is the default
-    database: myapp_%{tenant}
+    database: myapp_production          # Static database name
+    schema_name_pattern: "%{tenant}"    # Dynamic schema names
     host: localhost
 ```
 
 In this configuration:
-- A single PostgreSQL database named `myapp_tenanted` is created
-- Each tenant gets its own schema: `myapp_foo`, `myapp_bar`, etc.
+- A single PostgreSQL database named `myapp_production` is created (static name)
+- Each tenant gets its own schema using the pattern: tenant IDs directly (e.g., `account-123`, `account-456`)
 - The `schema_search_path` is set automatically to isolate tenants
 - All tables and data are stored within the tenant-specific schema
+- **Auto-detection:** When `schema_name_pattern` is present
 
 **Advantages:**
 - **Resource Efficient**: Single database process serves all tenants
@@ -320,9 +321,8 @@ Creates separate PostgreSQL databases for each tenant. Similar to how MySQL and 
 production:
   primary:
     adapter: postgresql
-    tenanted: true
-    postgresql_strategy: database  # Explicitly use database-per-tenant
     database: myapp_%{tenant}
+    tenanted: true
     host: localhost
 ```
 
@@ -359,7 +359,7 @@ In this configuration:
 
 ##### Choosing a Strategy
 
-**Use Schema Strategy (default) when:**
+**Use Schema Strategy with `schema_name_pattern` (recommended) when:**
 - You have many tenants (dozens to thousands)
 - Resource efficiency is important
 - You're following PostgreSQL best practices
@@ -378,7 +378,7 @@ In this configuration:
 To change strategies, you'll need to:
 
 1. Export data from existing tenants
-2. Update `database.yml` with new `postgresql_strategy`
+2. Update `database.yml` by adding or removing `schema_name_pattern`
 3. Create new tenant databases/schemas
 4. Import data into new structure
 
@@ -396,7 +396,7 @@ PostgreSQL has strict naming conventions for identifiers (database names and sch
 - Hyphens (`-`)
 
 **Additional Constraints:**
-- **Maximum Length:** 63 characters total (including any database prefix)
+- **Maximum Length:** 63 characters total (including any pattern prefix from `database` or `schema_name_pattern`)
 - **First Character:** Must be a letter or underscore (cannot start with a number or special character)
 - **Forward Slashes:** Not allowed in PostgreSQL identifiers
 
