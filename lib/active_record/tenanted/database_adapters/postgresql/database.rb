@@ -74,7 +74,14 @@ module ActiveRecord
               create_options[:encoding] = db_config.configuration_hash[:encoding] if db_config.configuration_hash.key?(:encoding)
               create_options[:collation] = db_config.configuration_hash[:collation] if db_config.configuration_hash.key?(:collation)
 
-              connection.create_database(database_path, create_options)
+              # CREATE DATABASE cannot run inside a transaction block in PostgreSQL
+              # Force commit any existing transaction, then use raw connection
+              connection.commit_db_transaction if connection.transaction_open?
+
+              encoding_clause = create_options[:encoding] ? " ENCODING '#{create_options[:encoding]}'" : ""
+              collation_clause = create_options[:collation] ? " LC_COLLATE '#{create_options[:collation]}'" : ""
+
+              connection.raw_connection.exec("CREATE DATABASE #{connection.quote_table_name(database_path)}#{encoding_clause}#{collation_clause}")
             end
           end
 
@@ -96,7 +103,9 @@ module ActiveRecord
                 Rails.logger.debug "Could not terminate connections for #{database_path}: #{e.message}"
               end
 
-              connection.execute("DROP DATABASE IF EXISTS #{db_name}")
+              # DROP DATABASE cannot run inside a transaction block in PostgreSQL
+              # Use raw connection to avoid transaction wrapping
+              connection.raw_connection.exec("DROP DATABASE IF EXISTS #{db_name}")
             end
           rescue ActiveRecord::NoDatabaseError, PG::Error => e
             # Database might not exist or other PostgreSQL error

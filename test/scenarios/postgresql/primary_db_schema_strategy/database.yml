@@ -13,7 +13,7 @@ test:
     <<: *default
     tenanted: true
     database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>
-    schema_name_pattern: "%{tenant}"
+    schema_name_pattern: "%%{tenant}"
     migrations_paths: "%{db_path}/tenanted_migrations"
   shared:
     <<: *default

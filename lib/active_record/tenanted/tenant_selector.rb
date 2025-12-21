@@ -24,7 +24,7 @@ module ActiveRecord
 
       def call(env)
         request = ActionDispatch::Request.new(env)
-        tenant_name = tenant_resolver.call(request)
+        tenant_name = tenant_resolver&.call(request)
 
         if tenant_name.blank?
           # run the request without wrapping it in a tenanted context

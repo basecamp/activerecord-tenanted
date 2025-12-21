@@ -19,7 +19,7 @@ module ActiveRecord
 
         private
           def set_current_tenant
-            tenant = tenant_resolver.call(request)
+            tenant = tenant_resolver&.call(request)
             return if tenant.nil?
 
             if tenant.present? && connection_class.tenant_exist?(tenant)

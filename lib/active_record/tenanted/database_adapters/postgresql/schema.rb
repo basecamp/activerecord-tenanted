@@ -232,7 +232,14 @@ module ActiveRecord
                 create_options[:encoding] = db_config.configuration_hash[:encoding] if db_config.configuration_hash.key?(:encoding)
                 create_options[:collation] = db_config.configuration_hash[:collation] if db_config.configuration_hash.key?(:collation)
 
-                connection.create_database(base_db_name, create_options)
+                # CREATE DATABASE cannot run inside a transaction block in PostgreSQL
+                # Force commit any existing transaction, then use raw connection
+                connection.commit_db_transaction if connection.transaction_open?
+
+                encoding_clause = create_options[:encoding] ? " ENCODING '#{create_options[:encoding]}'" : ""
+                collation_clause = create_options[:collation] ? " LC_COLLATE '#{create_options[:collation]}'" : ""
+
+                connection.raw_connection.exec("CREATE DATABASE #{connection.quote_table_name(base_db_name)}#{encoding_clause}#{collation_clause}")
               end
             end
           rescue PG::Error => e
