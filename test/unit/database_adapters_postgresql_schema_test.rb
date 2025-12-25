@@ -21,13 +21,18 @@ describe ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema do
       assert_equal "myapp_foo", adapter.database_path
     end
 
-    test "returns database pattern if tenant_schema not present" do
+    test "raises error if tenant_schema not present" do
       db_config_dynamic = Object.new
-      def db_config_dynamic.database; "myapp_%{tenant}"; end
+      def db_config_dynamic.database; "myapp_development"; end
       def db_config_dynamic.configuration_hash; {}; end
 
       adapter_dynamic = ActiveRecord::Tenanted::DatabaseAdapters::PostgreSQL::Schema.new(db_config_dynamic)
-      assert_equal "myapp_%{tenant}", adapter_dynamic.database_path
+
+      error = assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+        adapter_dynamic.database_path
+      end
+
+      assert_match(/tenant_schema not set/, error.message)
     end
   end
 

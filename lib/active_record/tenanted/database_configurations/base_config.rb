@@ -65,6 +65,9 @@ module ActiveRecord
             hash[:tenanted_config_name] = name
             new_host = host_for(tenant_name)
             hash[:host] = new_host if new_host
+
+            # Store the adapter class name so tenant configs use the same adapter type
+            hash[:tenanted_adapter_class] = config_adapter.class.name
           end
           Tenanted::DatabaseConfigurations::TenantConfig.new(env_name, config_name, config_hash)
         end

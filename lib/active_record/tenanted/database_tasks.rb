@@ -59,7 +59,13 @@ module ActiveRecord
       end
 
       def tenants
-        config.tenants.presence || [ get_default_tenant ].compact
+        # For colocated adapters, exclude the default tenant from the list
+        # since all tenants share the same database/infrastructure
+        if adapter_colocated?
+          config.tenants.presence || []
+        else
+          config.tenants.presence || [ get_default_tenant ].compact
+        end
       end
 
       def get_default_tenant

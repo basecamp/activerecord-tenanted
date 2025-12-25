@@ -14,7 +14,13 @@ module ActiveRecord
         end
 
         def config_adapter
-          @config_adapter ||= ActiveRecord::Tenanted::DatabaseAdapter.new(self)
+          # Use the stored adapter class if available (set by BaseConfig#new_tenant_config)
+          # This ensures tenant configs use the same adapter type as their base config
+          @config_adapter ||= if configuration_hash[:tenanted_adapter_class]
+            configuration_hash[:tenanted_adapter_class].constantize.new(self)
+          else
+            ActiveRecord::Tenanted::DatabaseAdapter.new(self)
+          end
         end
 
         def new_connection

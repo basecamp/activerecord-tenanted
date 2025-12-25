@@ -19,12 +19,10 @@ module ActiveRecord
         #
         # The adapter will:
         # - Connect to a single base database
-        # - Create/use schemas for tenant isolation (using "account-%{tenant}" pattern)
+        # - Create/use schemas for tenant isolation
         # - Set schema_search_path to isolate tenants
         class Schema < Base
           include Colocated
-
-          SCHEMA_NAME_PATTERN = "account-%{tenant}"
 
           def initialize(db_config)
             super
@@ -170,7 +168,7 @@ module ActiveRecord
 
           # Prepare tenant config hash with schema-specific settings
           def prepare_tenant_config_hash(config_hash, base_config, tenant_name)
-            schema_name = sprintf(SCHEMA_NAME_PATTERN, tenant: tenant_name.to_s)
+            schema_name = identifier_for(tenant_name)
             database_name = base_config.database
 
             config_hash.merge(
@@ -181,7 +179,7 @@ module ActiveRecord
           end
 
           def identifier_for(tenant_name)
-            sprintf(SCHEMA_NAME_PATTERN, tenant: tenant_name.to_s)
+            sprintf("%{tenant}", tenant: tenant_name.to_s)
           end
 
         private
