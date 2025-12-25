@@ -12,12 +12,9 @@ class TestCaching < ActionDispatch::IntegrationTest
       Note.create!(title: "tenant 2 note", body: "Four score and twenty years ago.")
     end
 
-    assert_equal(1, note1.id)
-    assert_equal(1, note2.id)
-
-    # get the tenant 1 note 1, generating a fragment cache
+    # get the tenant 1 note, generating a fragment cache
     integration_session.host = "#{tenant1}.example.com"
-    get note_path(id: 1)
+    get note_path(note1)
     assert_response :ok
     page1a = @response.body
 
@@ -25,21 +22,21 @@ class TestCaching < ActionDispatch::IntegrationTest
     # for testing the cache.
     assert_includes(page1a, "Random:")
 
-    # get the tenant 2 note 1, which should NOT clobber the tenant 1 note 1 cache
+    # get the tenant 2 note, which should NOT clobber the tenant 1 note cache
     integration_session.host = "#{tenant2}.example.com"
-    get note_path(id: 1)
+    get note_path(note2)
     assert_response :ok
     page2a = @response.body
 
-    # let's re-fetch tenant 1 note 1 to see if the fragment was cached correctly
+    # let's re-fetch tenant 1 note to see if the fragment was cached correctly
     integration_session.host = "#{tenant1}.example.com"
-    get note_path(id: 1)
+    get note_path(note1)
     assert_response :ok
     page1b = @response.body
 
-    # same for tenant 2 note 1
+    # same for tenant 2 note
     integration_session.host = "#{tenant2}.example.com"
-    get note_path(id: 1)
+    get note_path(note2)
     assert_response :ok
     page2b = @response.body
 

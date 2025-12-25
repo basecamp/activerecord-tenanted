@@ -3,15 +3,14 @@
 require "test_helper"
 
 describe "PostgreSQL Colocated Schema Strategy" do
-  with_scenario("postgresql/colocated_schema", :primary_record) do
-    describe "schema_name_pattern configuration" do
-      test "creates tenants with simple schema names in a static database" do
+  with_scenario("postgresql/primary_db_schema_strategy", :primary_record) do
+    describe "account- schema pattern" do
+      test "creates tenants with account- prefixed schema names in a static database" do
         # Verify the configuration is set correctly
         config = TenantedApplicationRecord.tenanted_root_config
-        assert_equal "%{tenant}", config.configuration_hash[:schema_name_pattern]
 
         # Database name should not contain %{tenant}
-        assert_match(/test_colocated$/, config.database)
+        assert_not config.database.include?("%{tenant}")
 
         # Create a tenant
         TenantedApplicationRecord.create_tenant("customer-abc-123")
@@ -81,7 +80,7 @@ describe "PostgreSQL Colocated Schema Strategy" do
         end
       end
 
-      test "schema names match the tenant names exactly" do
+      test "schema names are prefixed with account-" do
         tenant_name = "exact-match-test"
         TenantedApplicationRecord.create_tenant(tenant_name)
 
@@ -90,7 +89,7 @@ describe "PostgreSQL Colocated Schema Strategy" do
           schema_name = User.connection.select_value(
             "SELECT current_schema()"
           )
-          assert_equal tenant_name, schema_name
+          assert_equal "account-#{tenant_name}", schema_name
         end
       end
 
@@ -115,7 +114,7 @@ describe "PostgreSQL Colocated Schema Strategy" do
 
         # Both tenants should be in the same database
         assert_equal db_name_1, db_name_2
-        assert_match(/test_colocated$/, db_name_1)
+        assert_not db_name_1.include?("%{tenant}")
       end
 
       test "supports tenant names with special characters" do

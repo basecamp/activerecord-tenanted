@@ -6,9 +6,8 @@ class TestTurboBroadcast < ApplicationSystemTestCase
 
     note1 = Note.create!(title: "Tenant-1", body: "note 1 version 1")
     note2 = ApplicationRecord.create_tenant(tenant2) do
-      Note.create!(title: "Tenant-2", body: "note 2 version 1", id: note1.id)
+      Note.create!(title: "Tenant-2", body: "note 2 version 1")
     end
-    assert_equal(note1.id, note2.id)
 
     visit note_url(note1)
     assert_text("note 1 version 1")

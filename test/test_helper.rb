@@ -5,6 +5,9 @@ ENV["RAILS_ENV"] = "test"
 ENV["ARTENANT_SCHEMA_DUMP"] = "t" # we don't normally dump schemas outside of development
 ENV["VERBOSE"] = "false" # suppress database task output
 
+# Run cleanup at test suite start - defined later in ActiveRecord::Tenanted::TestCase
+# We can't call it yet since the class isn't defined, so we'll do it after Rails loads
+
 require "rails"
 require "rails/test_help" # should be before active_record is loaded to avoid schema/fixture setup
 
@@ -44,6 +47,75 @@ module ActiveRecord
       extend Minitest::Spec::DSL
 
       class << self
+        # Shared helper to clean up PostgreSQL test databases and schemas
+        def cleanup_postgresql_databases_and_schemas(skip_shared: false)
+          return unless defined?(PG)
+
+          prefix = ENV.fetch("POSTGRES_UNIQUE_PREFIX", "test")
+
+          begin
+            require "pg"
+            conn = PG.connect(
+              host: ENV.fetch("POSTGRES_HOST", "127.0.0.1"),
+              port: ENV.fetch("POSTGRES_PORT", "5432").to_i,
+              dbname: "postgres",
+              user: ENV.fetch("POSTGRES_USERNAME", "postgres"),
+              password: ENV.fetch("POSTGRES_PASSWORD", "postgres")
+            )
+
+            # Find all databases starting with the test prefix OR integration test prefix (t<digits>)
+            result = conn.exec(
+              "SELECT datname FROM pg_database WHERE (datname LIKE '#{prefix}%' OR datname ~ '^t[0-9]+') AND datistemplate = false"
+            )
+
+            result.each do |row|
+              db_name = row["datname"]
+              next if skip_shared && db_name == "#{prefix}_shared"
+
+              begin
+                conn.exec_params(
+                  "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = $1 AND pid <> pg_backend_pid()",
+                  [ db_name ]
+                )
+                conn.exec("DROP DATABASE IF EXISTS #{conn.escape_identifier(db_name)}")
+              rescue => e
+                # Ignore errors
+              end
+            end
+
+            # Clean up schemas in the base database
+            base_db = prefix
+            if conn.exec_params("SELECT 1 FROM pg_database WHERE datname = $1", [ base_db ]).ntuples > 0
+              conn.close
+              conn = PG.connect(
+                host: ENV.fetch("POSTGRES_HOST", "127.0.0.1"),
+                port: ENV.fetch("POSTGRES_PORT", "5432").to_i,
+                dbname: base_db,
+                user: ENV.fetch("POSTGRES_USERNAME", "postgres"),
+                password: ENV.fetch("POSTGRES_PASSWORD", "postgres")
+              )
+
+              schemas_result = conn.exec_params(
+                "SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE $1",
+                [ "account-%" ]
+              )
+
+              schemas_result.each do |row|
+                schema_name = row["schema_name"]
+                begin
+                  conn.exec("DROP SCHEMA IF EXISTS #{conn.escape_identifier(schema_name)} CASCADE")
+                rescue => e
+                  # Ignore
+                end
+              end
+            end
+
+            conn.close if conn
+          rescue => e
+            # Continue if PostgreSQL isn't available
+          end
+        end
+
         # When used with Minitest::Spec's `describe`, ActiveSupport::Testing's `test` creates methods
         # that may be inherited by subsequent describe blocks and run multiple times. Warn us if this
         # happens. (Note that Minitest::Spec's `it` doesn't do this.)
@@ -149,6 +221,7 @@ module ActiveRecord
             teardown do
               drop_shared_databases
               drop_tentant_databases
+              cleanup_postgresql_test_databases if defined?(PG) && db_adapter == "postgresql"
               ActiveRecord::Migration.verbose = @migration_verbose_was
               ActiveRecord::Base.configurations = @old_configurations
               ActiveRecord::Tasks::DatabaseTasks.db_dir = @old_db_dir
@@ -237,7 +310,9 @@ module ActiveRecord
       end
 
       def with_schema_dump_file
-        Dir.glob("test/scenarios/*/schema.rb").each do |schema_file|
+        # Only copy the schema file for the current adapter to avoid conflicts
+        schema_file = File.join("test", "scenarios", db_adapter, "schema.rb")
+        if File.exist?(schema_file)
           FileUtils.cp schema_file,
             ActiveRecord::Tasks::DatabaseTasks.schema_dump_path(base_config)
         end
@@ -281,6 +356,11 @@ module ActiveRecord
       end
 
       private
+        def cleanup_postgresql_test_databases
+          # Skip shared database during per-test cleanup (it gets dropped in drop_shared_databases)
+          self.class.cleanup_postgresql_databases_and_schemas(skip_shared: true)
+        end
+
         def drop_shared_databases
           shared_configs = all_configs.reject { |c| c.configuration_hash[:tenanted] || c.database.blank? }
           return if shared_configs.empty?
@@ -343,3 +423,6 @@ end
 
 # make TestCase the default
 Minitest::Spec.register_spec_type(//, ActiveRecord::Tenanted::TestCase)
+
+# Clean up PostgreSQL test databases at the start of the test suite
+ActiveRecord::Tenanted::TestCase.cleanup_postgresql_databases_and_schemas
