@@ -17,12 +17,21 @@ require "fileutils"
 require "tmpdir"
 require "yaml"
 require "open3"
+require "erb"
+require "debug"
 require "active_support"
 require "active_support/core_ext/object" # deep_dup
 
-scenarios = Dir.glob("test/scenarios/*db/*record.rb").map do |path|
-  database, models = path.scan(%r{test/scenarios/(.+db)/(.+record).rb}).flatten
-  { database: database, models: models }
+scenarios = Dir.glob("test/scenarios/**/*record.rb").map do |path|
+  adapter, database, models = path.scan(%r{test/scenarios/(.+)/([^/]+)/(.+record).rb}).flatten
+  { adapter: adapter, database: database, models: models }
+end
+
+# Filter by adapter if ADAPTER environment variable is set
+if ENV["ADAPTER"]
+  adapter_filter = ENV["ADAPTER"].downcase
+  scenarios.select! { |s| s[:adapter] == adapter_filter }
+  abort("No scenarios found for adapter: #{adapter_filter}") if scenarios.empty?
 end
 
 COLOR_FG_BLUE = "\e[0;34m"
@@ -49,13 +58,25 @@ def run_scenario(scenario)
   at_exit { FileUtils.remove_entry app_path } unless OPT_KEEP_DIR
   puts "Creating integration app for #{COLOR_FG_BLUE}#{scenario}#{COLOR_RESET} at #{app_path}"
 
+  # Generate a unique database prefix for this scenario to avoid conflicts
+  # Use a very short prefix to avoid PostgreSQL's 63-character identifier limit
+  # Format: t<pid> (process ID is already unique enough for concurrent runs)
+  db_prefix = "t#{Process.pid}"
+
   # make a copy of the smarty app
   FileUtils.copy_entry(SMARTY_PATH, app_path)
 
+  # Set environment variables for ERB processing
+  ENV["POSTGRES_UNIQUE_PREFIX"] = db_prefix if scenario[:adapter] == "postgresql"
+  ENV["MYSQL_UNIQUE_PREFIX"] = db_prefix if scenario[:adapter] == "mysql"
+
   # generate database file
-  database_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:database]}/database.yml")
-  database_file_contents = sprintf(File.read(database_file), storage: "storage", db_path: "db")
-  database_file_hash = YAML.load(database_file_contents)
+  database_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:adapter]}/#{scenario[:database]}/database.yml")
+  erb_content = ERB.new(File.read(database_file)).result
+  storage_path = File.join(app_path, "storage")
+  db_path = File.join(app_path, "db")
+  database_file_contents = sprintf(erb_content, storage: storage_path, db_path: db_path)
+  database_file_hash = YAML.unsafe_load(database_file_contents)
   database_file_hash["development"] = database_file_hash["test"].deep_dup
   database_file_hash["development"].each_value do |hash|
     hash["database"] = hash["database"].sub("/test/", "/development/")
@@ -63,14 +84,14 @@ def run_scenario(scenario)
   File.write(File.join(app_path, "config/database.yml"), database_file_hash.to_yaml)
 
   # generate models using ApplicationRecord
-  models_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:database]}/#{scenario[:models]}.rb")
+  models_file = File.join(GEM_PATH, "test/scenarios/#{scenario[:adapter]}/#{scenario[:database]}/#{scenario[:models]}.rb")
   models_file_contents = File.read(models_file)
                            .gsub("TenantedApplicationRecord", "ApplicationRecord")
   File.write(File.join(app_path, "app/models/application_record.rb"), models_file_contents)
 
   # copy migrations from scenario and smarty app
   FileUtils.mkdir_p(File.join(app_path, "db"))
-  FileUtils.cp_r(Dir.glob(File.join(GEM_PATH, "test/scenarios/#{scenario[:database]}/*migrations")),
+  FileUtils.cp_r(Dir.glob(File.join(GEM_PATH, "test/scenarios/#{scenario[:adapter]}/#{scenario[:database]}/*migrations")),
                  File.join(app_path, "db"))
   FileUtils.cp_r(Dir.glob(File.join(app_path, "db/migrate/*rb")),
                  File.join(app_path, "db/tenanted_migrations"))
@@ -82,22 +103,26 @@ def run_scenario(scenario)
     Bundler.with_original_env do
       run_cmd(scenario, "bundle check || bundle install")
 
-      # set up the database and schema files
-      run_cmd(scenario, "bin/rails db:prepare")
+     adapter_config = {"RAILS_ENV" => "test","ARTENANT_SCHEMA_DUMP" => "1"}
+     if scenario[:adapter] == "mysql"
+       adapter_config.merge!({ "MYSQL_UNIQUE_PREFIX" => db_prefix })
+     elsif scenario[:adapter] == "postgresql"
+       adapter_config.merge!({ "POSTGRES_UNIQUE_PREFIX" => db_prefix })
+     end
+
+      # Drop existing databases to ensure fresh setup
+      run_cmd(scenario, "bin/rails db:drop", env: { **adapter_config }) rescue nil
+
+      run_cmd(scenario, "bin/rails db:prepare", env: { **adapter_config })
 
       # validate-ish the setup
       prefix = scenario[:database].match?(/\Asecondary/) ? "tenanted_" : ""
       File.exist?("db/#{prefix}schema.rb") || abort("Schema dump not generated")
       File.exist?("db/#{prefix}schema_cache.yml") || abort("Schema cache dump not generated")
 
-      # create a fake tenant database to validate that it is deleted in the test suite
-      dev_db = Dir.glob("storage/development/*/development-tenant/main.sqlite3").first
-      test_db = dev_db.gsub("/development/", "/test/").gsub("development-tenant", "delete-me")
-      FileUtils.mkdir_p(File.dirname(test_db))
-      FileUtils.touch(test_db)
-
-      # run in parallel half the time
-      env = if rand(2).zero?
+      # run in parallel half the time, but only when we're in parallel mode
+      #  (otherwise it can cause deadlocks with PostgreSQL)
+      env = if PARALLEL && rand(2).zero?
         { "PARALLEL_WORKERS" => "2" }
       else
         { "PARALLEL_WORKERS" => "1" }

@@ -138,9 +138,16 @@ module ActiveRecord
             unless adapter.database_exist?
               adapter.create_database
 
-              with_tenant(tenant_name) do
-                connection_pool(schema_version_check: false)
-                ActiveRecord::Tenanted::DatabaseTasks.new(base_config).migrate_tenant(tenant_name)
+              # Disable schema version checks during tenant creation and migration
+              # This prevents PendingMigrationError when the tenant schema is first being set up
+              Thread.current[:ar_tenanted_skip_schema_check] = true
+              begin
+                with_tenant(tenant_name) do
+                  connection_pool(schema_version_check: false)
+                  ActiveRecord::Tenanted::DatabaseTasks.new(base_config).migrate_tenant(tenant_name)
+                end
+              ensure
+                Thread.current[:ar_tenanted_skip_schema_check] = false
               end
 
               created_db = true
@@ -195,7 +202,10 @@ module ActiveRecord
                 pool = retrieve_connection_pool(strict: false)
 
                 if pool.nil?
-                  _create_tenanted_pool(schema_version_check: schema_version_check)
+                  # Check thread-local override for schema version check during tenant creation
+                  skip_check = Thread.current[:ar_tenanted_skip_schema_check]
+                  effective_schema_check = skip_check ? false : schema_version_check
+                  _create_tenanted_pool(schema_version_check: effective_schema_check)
                   pool = retrieve_connection_pool(strict: true)
                 end
               end
@@ -213,7 +223,7 @@ module ActiveRecord
 
         def _create_tenanted_pool(schema_version_check: true) # :nodoc:
           # ensure all classes use the same connection pool
-          return superclass._create_tenanted_pool unless connection_class?
+          return superclass._create_tenanted_pool(schema_version_check: schema_version_check) unless connection_class?
 
           tenant = current_tenant
           db_config = tenanted_root_config.new_tenant_config(tenant)

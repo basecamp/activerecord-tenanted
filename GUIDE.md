@@ -272,6 +272,138 @@ class ApplicationRecord < ActiveRecord::Base
 end
 ```
 
+#### 2.2.1 PostgreSQL Multi-Tenancy Strategies
+
+PostgreSQL supports two isolation strategies, automatically inferred from the database name configuration.
+
+##### Schema-Based Multi-Tenancy
+
+Uses PostgreSQL schemas within a single database. This is the recommended strategy for most use cases.
+
+**Configuration:**
+
+``` yaml
+production:
+  primary:
+    adapter: postgresql
+    database: myapp_production  # Static database name
+    tenanted: true
+    host: localhost
+```
+
+In this configuration:
+- A single PostgreSQL database named `myapp_production` is created (static name)
+- Each tenant gets its own schema with the prefix `account-` (e.g., `account-tenant1`, `account-tenant2`)
+- The `schema_search_path` is set automatically to isolate tenants
+- All tables and data are stored within the tenant-specific schema
+- **Auto-detection:** Automatically used when database name does NOT contain `%{tenant}`
+
+**Advantages:**
+- **Resource Efficient**: Single database process serves all tenants
+- **Lower Memory Usage**: Shared buffer cache across tenants
+- **Simpler Backup**: One database to backup/restore
+- **Better for Scale**: Supports thousands of tenants efficiently
+- **PostgreSQL Best Practice**: Aligns with PostgreSQL's schema design
+
+**Considerations:**
+- Connection limits are shared across all tenants
+- Schema-level isolation (not database-level)
+- All tenants must use the same PostgreSQL version/settings
+
+##### Database-Based Multi-Tenancy
+
+Creates separate PostgreSQL databases for each tenant. Similar to how MySQL and SQLite work in this gem.
+
+**Configuration:**
+
+``` yaml
+production:
+  primary:
+    adapter: postgresql
+    database: "%{tenant}"
+    tenanted: true
+    host: localhost
+```
+
+In this configuration:
+- Each tenant gets its own PostgreSQL database: `account_foo`, `account_bar`, etc.
+- Each database has independent schemas, users, and settings
+- Complete isolation between tenants at the database level
+- **Auto-detection:** Automatically used when database name contains `%{tenant}`
+
+**Advantages:**
+- **Stronger Isolation**: Complete database-level separation
+- **Independent Configuration**: Each tenant can have different settings
+- **Easier Data Export**: Simple to dump/restore individual tenants
+- **Familiar Pattern**: Consistent with MySQL/SQLite behavior
+
+**Considerations:**
+- Higher resource usage (more database processes)
+- Higher memory usage (separate buffer cache per database)
+- More complex backup/restore operations
+- PostgreSQL may have limits on number of databases
+- Not recommended for hundreds of tenants
+
+##### Performance Comparison
+
+| Metric | Schema Strategy | Database Strategy |
+|--------|----------------|-------------------|
+| **Connection Overhead** | Low (single DB) | Medium (multiple DBs) |
+| **Memory Usage** | Low (shared cache) | High (cache per DB) |
+| **Query Performance** | Excellent | Excellent |
+| **Tenant Isolation** | Schema-level | Database-level |
+| **Backup/Restore** | Simple (one DB) | Complex (many DBs) |
+| **Tenant Limit** | Thousands | Hundreds |
+| **Resource Efficiency** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
+| **Data Isolation** | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+
+##### Choosing a Strategy
+
+**Use Schema Strategy (recommended) when:**
+- You have many tenants (dozens to thousands)
+- Resource efficiency is important
+- You're following PostgreSQL best practices
+- Tenants share the same configuration needs
+- You want simpler operations (backup, monitoring, etc.)
+- Configuration: Use a static database name (e.g., `database: myapp_production`)
+
+**Use Database Strategy when:**
+- You have few tenants (less than 100)
+- You need database-level isolation for compliance
+- Each tenant needs different database settings
+- You need to easily export individual tenant databases
+- You want consistency with MySQL/SQLite behavior
+- Configuration: Use `%{tenant}` in database name (e.g., `database: "%{tenant}"`)
+
+##### Migration Between Strategies
+
+To change strategies, you'll need to:
+
+1. Export data from existing tenants
+2. Update `database.yml`:
+   - For Schema → Database: Change `database: myapp_production` to `database: "%{tenant}"`
+   - For Database → Schema: Change `database: "%{tenant}"` to `database: myapp_production`
+3. Create new tenant databases/schemas
+4. Import data into new structure
+
+**Note:** There is no automated migration tool. Plan strategy choice carefully before production deployment.
+
+##### PostgreSQL Tenant Name Constraints
+
+PostgreSQL has strict naming conventions for identifiers (database names and schema names). When using PostgreSQL with this gem, tenant names are subject to the following constraints:
+
+**Allowed Characters:**
+- Letters (a-z, A-Z)
+- Numbers (0-9)
+- Underscores (`_`)
+- Dollar signs (`$`)
+- Hyphens (`-`)
+
+**Additional Constraints:**
+- **Maximum Length:** 63 characters total (including the `account-` prefix for schema strategy)
+- **First Character:** Must be a letter or underscore (cannot start with a number or special character)
+- **Forward Slashes:** Not allowed in PostgreSQL identifiers
+
 ### 2.3 Configuring `max_connection_pools`
 
 By default, Active Record Tenanted will cap the number of tenanted connection pools to 50. Setting a limit on the number of "live" connection pools at any one time provides control over the number of file descriptors used for database connections. For SQLite databases, it's also an important control on the amount of memory used.
@@ -289,6 +421,23 @@ production:
 
 Active Record Tenanted will reap the least-recently-used connection pools when this limit is surpassed. Developers are encouraged to tune this parameter with care, since setting it too low may lead to increased request latency due to frequently re-establishing database connections, while setting it too high may consume precious file descriptors and memory resources.
 
+
+### 2.3.1 Configuring PostgreSQL Maintenance Database
+
+PostgreSQL requires connecting to an existing database to perform administrative operations like creating or dropping databases, listing databases, or creating schemas. By default, Active Record Tenanted uses the "postgres" database (the default PostgreSQL system database) for these maintenance operations.
+
+You can customize which database is used for maintenance operations by setting the `maintenance_database` parameter in `config/database.yml`:
+
+``` yaml
+development:
+  primary:
+    adapter: postgresql
+    database: myapp_development
+    tenanted: true
+    maintenance_database: myapp_maintenance_development
+```
+
+**Note:** The maintenance database must exist and be accessible by your database user before running any tenant operations. This setting applies to both schema-based and database-based multi-tenancy strategies.
 
 ### 2.4 Configuring the Connection Class
 

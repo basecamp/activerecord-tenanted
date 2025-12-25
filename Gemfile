@@ -9,6 +9,8 @@ group :development, :test do
   gem "sqlite3", "2.7.4"
   gem "debug", "1.11.0"
   gem "minitest-parallel_fork", "2.1.0", require: false
+  gem "mysql2", "~> 0.5", require: false
+  gem "pg", "~> 1.1", require: false
 end
 
 group :rubocop do

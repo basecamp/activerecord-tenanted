@@ -37,15 +37,37 @@ module ActiveRecord
         end
 
         def tenants
-          config_adapter.tenant_databases
+          all_databases = ActiveRecord::Base.configurations.configs_for(env_name: env_name)
+          untenanted = all_databases.reject { |c| c.configuration_hash[:tenanted] }.filter_map(&:database)
+
+          config_adapter.tenant_databases.reject do |tenant_name|
+            database = database_for(tenant_name)
+            untenanted.include?(database)
+          end
         end
 
         def new_tenant_config(tenant_name)
           config_name = "#{name}_#{tenant_name}"
           config_hash = configuration_hash.dup.tap do |hash|
             hash[:tenant] = tenant_name
+
+            # All adapters handle their own database naming
             hash[:database] = database_for(tenant_name)
+
+            # Store tenant-specific database/schema name for adapters that need it
+            hash[:tenant_database] = database_for(tenant_name)
+
+            # Allow adapter to modify config hash (for PostgreSQL schema strategy)
+            if config_adapter.respond_to?(:prepare_tenant_config_hash)
+              hash.merge!(config_adapter.prepare_tenant_config_hash(hash, self, tenant_name))
+            end
+
             hash[:tenanted_config_name] = name
+            new_host = host_for(tenant_name)
+            hash[:host] = new_host if new_host
+
+            # Store the adapter class name so tenant configs use the same adapter type
+            hash[:tenanted_adapter_class] = config_adapter.class.name
           end
           Tenanted::DatabaseConfigurations::TenantConfig.new(env_name, config_name, config_hash)
         end
@@ -60,6 +82,13 @@ module ActiveRecord
         def max_connection_pools
           (configuration_hash[:max_connection_pools] || DEFAULT_MAX_CONNECTION_POOLS).to_i
         end
+
+        private
+          def host_for(tenant_name)
+            # Only override host if it contains a tenant template
+            return nil unless host&.include?("%{tenant}")
+            sprintf(host, tenant: tenant_name)
+          end
       end
     end
   end
