@@ -434,6 +434,23 @@ production:
 Active Record Tenanted will reap the least-recently-used connection pools when this limit is surpassed. Developers are encouraged to tune this parameter with care, since setting it too low may lead to increased request latency due to frequently re-establishing database connections, while setting it too high may consume precious file descriptors and memory resources.
 
 
+### 2.3.1 Configuring PostgreSQL Maintenance Database
+
+PostgreSQL requires connecting to an existing database to perform administrative operations like creating or dropping databases, listing databases, or creating schemas. By default, Active Record Tenanted uses the "postgres" database (the default PostgreSQL system database) for these maintenance operations.
+
+You can customize which database is used for maintenance operations by setting the `maintenance_database` parameter in `config/database.yml`:
+
+``` yaml
+development:
+  primary:
+    adapter: postgresql
+    database: myapp_development
+    tenanted: true
+    maintenance_database: myapp_maintenance_development
+```
+
+**Note:** The maintenance database must exist and be accessible by your database user before running any tenant operations. This setting applies to both schema-based and database-based multi-tenancy strategies.
+
 ### 2.4 Configuring the Connection Class
 
 By default, Active Record Tenanted assumes that `ApplicationRecord` is the tenanted abstract base class:

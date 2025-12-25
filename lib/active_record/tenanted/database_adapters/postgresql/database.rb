@@ -32,8 +32,8 @@ module ActiveRecord
               with_maintenance_connection do |connection|
                 # Query pg_database for databases matching pattern
                 result = connection.execute(<<~SQL)
-                  SELECT datname#{' '}
-                  FROM pg_database#{' '}
+                  SELECT datname
+                  FROM pg_database
                   WHERE datname LIKE '#{connection.quote_string(like_pattern)}'
                     AND datistemplate = false
                   ORDER BY datname
@@ -115,8 +115,8 @@ module ActiveRecord
           def database_exist?
             with_maintenance_connection do |connection|
               result = connection.execute(<<~SQL)
-                SELECT 1#{' '}
-                FROM pg_database#{' '}
+                SELECT 1
+                FROM pg_database
                 WHERE datname = '#{connection.quote_string(database_path)}'
               SQL
               result.any?
@@ -155,7 +155,7 @@ module ActiveRecord
 
           def maintenance_config
             config_hash = db_config.configuration_hash.dup.merge(
-              database: "postgres",  # Connect to PostgreSQL maintenance database
+              database: maintenance_db_name,  # Connect to maintenance database
               database_tasks: false
             )
             ActiveRecord::DatabaseConfigurations::HashConfig.new(

@@ -214,7 +214,7 @@ module ActiveRecord
 
             # Connect to postgres maintenance database to check/create base database
             maintenance_config = db_config.configuration_hash.dup.merge(
-              database: "postgres",
+              database: maintenance_db_name,
               database_tasks: false
             )
             maintenance_db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(

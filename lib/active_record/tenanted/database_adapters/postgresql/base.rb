@@ -100,6 +100,10 @@ module ActiveRecord
             # For PostgreSQL, path is just the name (database or schema)
             name
           end
+
+          def maintenance_db_name
+            db_config.configuration_hash[:maintenance_database] || "postgres"
+          end
         end
       end
     end
