@@ -33,9 +33,22 @@ module ActiveRecord
         migrate(db_config)
       end
 
+      def create_all
+        # For colocated strategies, create the shared database that will contain all tenants
+        # (e.g., PostgreSQL schema strategy creates a single base database for all schemas)
+        # For isolated strategies, individual databases are created on-demand via migrate_tenant
+        config.config_adapter.create_colocated_database if adapter_colocated?
+      end
+
       def drop_all
-        tenants.each do |tenant|
-          drop_tenant(tenant)
+        # For colocated strategies, drop the shared database containing all tenants
+        # For isolated strategies, drop each tenant database individually
+        if adapter_colocated?
+          config.config_adapter.drop_colocated_database
+        else
+          tenants.each do |tenant|
+            drop_tenant(tenant)
+          end
         end
       end
 
@@ -46,7 +59,13 @@ module ActiveRecord
       end
 
       def tenants
-        config.tenants.presence || [ get_default_tenant ].compact
+        # For colocated adapters, exclude the default tenant from the list
+        # since all tenants share the same database/infrastructure
+        if adapter_colocated?
+          config.tenants.presence || []
+        else
+          config.tenants.presence || [ get_default_tenant ].compact
+        end
       end
 
       def get_default_tenant
@@ -81,20 +100,30 @@ module ActiveRecord
 
       # This is essentially a simplified implementation of ActiveRecord::Tasks::DatabaseTasks.migrate
       def migrate(config)
+        unless config.config_adapter.database_exist?
+          config.config_adapter.create_database
+          $stdout.puts "Created database '#{config.database}'" if verbose?
+        end
+
         ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(config) do |conn|
           pool = conn.pool
 
-          # initialize_database
-          unless pool.schema_migration.table_exists?
+          begin
+            database_already_initialized = pool.schema_migration.table_exists?
+          rescue ActiveRecord::NoDatabaseError
+            database_already_initialized = false
+          end
+
+          unless database_already_initialized
             schema_dump_path = ActiveRecord::Tasks::DatabaseTasks.schema_dump_path(config)
             if schema_dump_path && File.exist?(schema_dump_path)
               ActiveRecord::Tasks::DatabaseTasks.load_schema(config)
             end
-            # TODO: emit a "Created database" message once we sort out implicit creation
           end
 
           # migrate
           migrated = false
+
           if pool.migration_context.pending_migration_versions.present?
             pool.migration_context.migrate(nil)
             pool.schema_cache.clear!
@@ -103,7 +132,7 @@ module ActiveRecord
 
           # dump the schema and schema cache
           if Rails.env.development? || ENV["ARTENANT_SCHEMA_DUMP"].present?
-            if migrated
+            if migrated || !database_already_initialized
               ActiveRecord::Tasks::DatabaseTasks.dump_schema(config)
             end
 
@@ -121,6 +150,12 @@ module ActiveRecord
 
       def register_rake_tasks
         name = config.name
+
+        desc "Create tenanted #{name} databases for current environment"
+        task "db:create:#{name}" => "load_config" do
+          create_all
+        end
+        task "db:create" => "db:create:#{name}"
 
         desc "Migrate tenanted #{name} databases for current environment"
         task "db:migrate:#{name}" => "load_config" do
@@ -160,6 +195,11 @@ module ActiveRecord
         task "db:reset:#{name}" => [ "db:drop:#{name}", "db:migrate:#{name}" ]
         task "db:reset" => "db:reset:#{name}"
       end
+
+      private
+        def adapter_colocated?
+          config.config_adapter.respond_to?(:colocated?) && config.config_adapter.colocated?
+        end
     end
   end
 end

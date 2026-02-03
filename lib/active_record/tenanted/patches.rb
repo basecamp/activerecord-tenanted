@@ -45,6 +45,35 @@ module ActiveRecord
           end
         end
       end
+
+      # Patch PostgreSQL adapter to make create_schema idempotent
+      # This is needed because our schema-per-tenant approach creates the schema
+      # before loading the schema dump, and the schema dump also tries to create it.
+      module PostgreSQLSchemaStatements
+        def create_schema(schema_name, options = {})
+          quoted_name = quote_table_name(schema_name)
+          sql = +"CREATE SCHEMA IF NOT EXISTS #{quoted_name}"
+
+          if options[:owner]
+            sql << " AUTHORIZATION #{quote_table_name(options[:owner])}"
+          end
+
+          execute sql
+        end
+
+        # Patch schema_search_path= to properly quote schema names with special characters
+        # PostgreSQL requires identifiers with special characters (like hyphens) to be quoted
+        def schema_search_path=(schema_csv)
+          if schema_csv.present?
+            schemas = schema_csv.split(",").map(&:strip)
+            quoted_schemas = schemas.map { |schema| quote_table_name(schema) }
+            execute("SET search_path TO #{quoted_schemas.join(', ')}", "SCHEMA")
+          else
+            execute("SET search_path TO DEFAULT", "SCHEMA")
+          end
+          @schema_search_path = schema_csv
+        end
+      end
     end
   end
 end

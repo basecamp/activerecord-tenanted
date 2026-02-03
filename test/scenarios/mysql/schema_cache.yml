@@ -1,0 +1,347 @@
+--- !ruby/object:ActiveRecord::ConnectionAdapters::SchemaCache
+columns:
+  active_storage_attachments:
+  - &8 !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: blob_id
+    cast_type: &1 !ruby/object:ActiveModel::Type::Integer
+      precision:
+      scale:
+      limit: 8
+      max: 9223372036854775808
+      min: -9223372036854775808
+    sql_type_metadata: &3 !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::TypeMetadata
+      delegate_dc_obj: &2 !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
+        sql_type: bigint
+        type: :integer
+        limit: 8
+        precision:
+        scale:
+      extra: ''
+    'null': false
+    default:
+    default_function:
+    collation:
+    comment:
+  - &6 !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: created_at
+    cast_type: &10 !ruby/object:ActiveRecord::Type::DateTime
+      precision: 6
+      scale:
+      limit:
+      timezone:
+    sql_type_metadata: &11 !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::TypeMetadata
+      delegate_dc_obj: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
+        sql_type: datetime(6)
+        type: :datetime
+        limit:
+        precision: 6
+        scale:
+      extra: ''
+    'null': false
+    default:
+    default_function:
+    collation:
+    comment:
+  - &7 !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: id
+    cast_type: *1
+    sql_type_metadata: !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::TypeMetadata
+      delegate_dc_obj: *2
+      extra: auto_increment
+    'null': false
+    default:
+    default_function:
+    collation:
+    comment:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: name
+    cast_type: &4 !ruby/object:ActiveModel::Type::String
+      true: '1'
+      false: '0'
+      precision:
+      scale:
+      limit: 255
+    sql_type_metadata: &5 !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::TypeMetadata
+      delegate_dc_obj: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
+        sql_type: varchar(255)
+        type: :string
+        limit: 255
+        precision:
+        scale:
+      extra: ''
+    'null': false
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: record_id
+    cast_type: *1
+    sql_type_metadata: *3
+    'null': false
+    default:
+    default_function:
+    collation:
+    comment:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: record_type
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': false
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  active_storage_blobs:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: byte_size
+    cast_type: *1
+    sql_type_metadata: *3
+    'null': false
+    default:
+    default_function:
+    collation:
+    comment:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: checksum
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': true
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: content_type
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': true
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  - *6
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: filename
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': false
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  - *7
+  - &9 !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: key
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': false
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: metadata
+    cast_type: &12 !ruby/object:ActiveRecord::Type::Text
+      true: t
+      false: f
+      precision:
+      scale:
+      limit: 65535
+    sql_type_metadata: &13 !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::TypeMetadata
+      delegate_dc_obj: !ruby/object:ActiveRecord::ConnectionAdapters::SqlTypeMetadata
+        sql_type: text
+        type: :text
+        limit: 65535
+        precision:
+        scale:
+      extra: ''
+    'null': true
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: service_name
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': false
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  active_storage_variant_records:
+  - *8
+  - *7
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: variation_digest
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': false
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  ar_internal_metadata:
+  - *6
+  - *9
+  - &14 !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: updated_at
+    cast_type: *10
+    sql_type_metadata: *11
+    'null': false
+    default:
+    default_function:
+    collation:
+    comment:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: value
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': true
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  notes:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: body
+    cast_type: *12
+    sql_type_metadata: *13
+    'null': true
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  - *6
+  - *7
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: title
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': true
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  - *14
+  schema_migrations:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: version
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': false
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  users:
+  - *6
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::Column
+    name: email
+    cast_type: *4
+    sql_type_metadata: *5
+    'null': true
+    default:
+    default_function:
+    collation: utf8mb4_0900_ai_ci
+    comment:
+  - *7
+  - *14
+primary_keys:
+  active_storage_attachments: id
+  active_storage_blobs: id
+  active_storage_variant_records: id
+  ar_internal_metadata: key
+  notes: id
+  schema_migrations: version
+  users: id
+data_sources:
+  active_storage_attachments: true
+  active_storage_blobs: true
+  active_storage_variant_records: true
+  ar_internal_metadata: true
+  notes: true
+  schema_migrations: true
+  users: true
+indexes:
+  active_storage_attachments:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::IndexDefinition
+    enabled: true
+    table: active_storage_attachments
+    name: index_active_storage_attachments_on_blob_id
+    unique: false
+    columns:
+    - blob_id
+    lengths: {}
+    orders: {}
+    opclasses: {}
+    where:
+    type:
+    using: :btree
+    include:
+    nulls_not_distinct:
+    comment:
+    valid: true
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::IndexDefinition
+    enabled: true
+    table: active_storage_attachments
+    name: index_active_storage_attachments_uniqueness
+    unique: true
+    columns:
+    - record_type
+    - record_id
+    - name
+    - blob_id
+    lengths: {}
+    orders: {}
+    opclasses: {}
+    where:
+    type:
+    using: :btree
+    include:
+    nulls_not_distinct:
+    comment:
+    valid: true
+  active_storage_blobs:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::IndexDefinition
+    enabled: true
+    table: active_storage_blobs
+    name: index_active_storage_blobs_on_key
+    unique: true
+    columns:
+    - key
+    lengths: {}
+    orders: {}
+    opclasses: {}
+    where:
+    type:
+    using: :btree
+    include:
+    nulls_not_distinct:
+    comment:
+    valid: true
+  active_storage_variant_records:
+  - !ruby/object:ActiveRecord::ConnectionAdapters::MySQL::IndexDefinition
+    enabled: true
+    table: active_storage_variant_records
+    name: index_active_storage_variant_records_uniqueness
+    unique: true
+    columns:
+    - blob_id
+    - variation_digest
+    lengths: {}
+    orders: {}
+    opclasses: {}
+    where:
+    type:
+    using: :btree
+    include:
+    nulls_not_distinct:
+    comment:
+    valid: true
+  ar_internal_metadata: []
+  notes: []
+  schema_migrations: []
+  users: []
+version: 20250222215621

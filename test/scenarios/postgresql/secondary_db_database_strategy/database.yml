@@ -1,0 +1,22 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  pool: 20
+  max_connections: 20
+  username: <%= ENV.fetch('POSTGRES_USERNAME', 'postgres') %>
+  password: <%= ENV.fetch('POSTGRES_PASSWORD', 'postgres') %>
+  host: <%= ENV.fetch('POSTGRES_HOST', '127.0.0.1') %>
+  port: <%= ENV.fetch('POSTGRES_PORT', '5432') %>
+
+test:
+  shared:
+    <<: *default
+    database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_shared
+    migrations_paths: "%{db_path}/shared_migrations"
+  tenanted:
+    <<: *default
+    tenanted: true
+    database: <%= ENV.fetch('POSTGRES_UNIQUE_PREFIX', 'test') %>_%%{tenant}
+    migrations_paths: "%{db_path}/tenanted_migrations"
+
+

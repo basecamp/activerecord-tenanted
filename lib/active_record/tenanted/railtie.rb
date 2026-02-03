@@ -98,6 +98,11 @@ module ActiveRecord
           prepend ActiveRecord::Tenanted::Patches::Attributes
           ActiveRecord::Tasks::DatabaseTasks.prepend ActiveRecord::Tenanted::Patches::DatabaseTasks
         end
+
+        # Patch PostgreSQL adapter to make create_schema idempotent
+        ActiveSupport.on_load(:active_record_postgresqladapter) do
+          prepend ActiveRecord::Tenanted::Patches::PostgreSQLSchemaStatements
+        end
       end
 
       initializer "active_record_tenanted.active_job" do

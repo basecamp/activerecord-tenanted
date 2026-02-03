@@ -14,7 +14,13 @@ module ActiveRecord
         end
 
         def config_adapter
-          @config_adapter ||= ActiveRecord::Tenanted::DatabaseAdapter.new(self)
+          # Use the stored adapter class if available (set by BaseConfig#new_tenant_config)
+          # This ensures tenant configs use the same adapter type as their base config
+          @config_adapter ||= if configuration_hash[:tenanted_adapter_class]
+            configuration_hash[:tenanted_adapter_class].constantize.new(self)
+          else
+            ActiveRecord::Tenanted::DatabaseAdapter.new(self)
+          end
         end
 
         def new_connection
@@ -22,7 +28,15 @@ module ActiveRecord
           # Rails, and this gem's dependency has been bumped to require that version or later.
           config_adapter.ensure_database_directory_exists
 
-          super.tap { |connection| connection.tenant = tenant }
+          super.tap do |connection|
+            connection.tenant = tenant
+
+            # Set schema search path if configured (used by PostgreSQL schema strategy)
+            if configuration_hash[:schema_search_path]
+              schema = configuration_hash[:schema_search_path]
+              connection.execute("SET search_path TO #{connection.quote_table_name(schema)}")
+            end
+          end
         end
 
         def tenanted_config_name
