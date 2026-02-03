@@ -13,6 +13,8 @@ class TestTurboBroadcast < ApplicationSystemTestCase
     visit note_url(note1)
     assert_text("note 1 version 1")
 
+    wait_for_turbo_stream_connected
+
     note1.update!(body: "note 1 version 2")
     assert_text("note 1 version 2")
 
@@ -22,4 +24,13 @@ class TestTurboBroadcast < ApplicationSystemTestCase
     assert_no_text("note 2 version 2")
     assert_text("note 1 version 2")
   end
+
+  private
+    # Wait for the Turbo Stream WebSocket connection to establish before broadcasting updates.
+    # Without this, broadcasts can be sent before the browser is subscribed, causing them to be lost.
+    def wait_for_turbo_stream_connected
+      assert_selector("turbo-cable-stream-source[connected]", visible: false, wait: 5)
+    rescue Capybara::ElementNotFound
+      sleep 0.1
+    end
 end

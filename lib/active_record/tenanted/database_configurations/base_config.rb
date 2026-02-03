@@ -37,7 +37,13 @@ module ActiveRecord
         end
 
         def tenants
-          config_adapter.tenant_databases
+          all_databases = ActiveRecord::Base.configurations.configs_for(env_name: env_name)
+          untenanted = all_databases.reject { |c| c.configuration_hash[:tenanted] }.filter_map(&:database)
+
+          config_adapter.tenant_databases.reject do |tenant_name|
+            database = database_for(tenant_name)
+            untenanted.include?(database)
+          end
         end
 
         def new_tenant_config(tenant_name)
@@ -46,6 +52,8 @@ module ActiveRecord
             hash[:tenant] = tenant_name
             hash[:database] = database_for(tenant_name)
             hash[:tenanted_config_name] = name
+            new_host = host_for(tenant_name)
+            hash[:host] = new_host if new_host
           end
           Tenanted::DatabaseConfigurations::TenantConfig.new(env_name, config_name, config_hash)
         end
@@ -60,6 +68,13 @@ module ActiveRecord
         def max_connection_pools
           (configuration_hash[:max_connection_pools] || DEFAULT_MAX_CONNECTION_POOLS).to_i
         end
+
+        private
+          def host_for(tenant_name)
+            # Only override host if it contains a tenant template
+            return nil unless host&.include?("%{tenant}")
+            sprintf(host, tenant: tenant_name)
+          end
       end
     end
   end
