@@ -29,11 +29,21 @@ module ActiveRecord
 
           db = sprintf(database, tenant: tenant_name)
 
+          if %w[mysql2 trilogy].include?(adapter) && db.length > 64
+            raise BadTenantNameError, "Database name too long (max 64 characters): #{db.inspect}"
+          end
+
           if test_worker_id
             db = config_adapter.test_workerize(db, test_worker_id)
           end
 
           db
+        end
+
+        def host_for(tenant_name)
+          return unless host
+
+          sprintf(host, tenant: tenant_name.to_s)
         end
 
         def tenants
@@ -45,6 +55,7 @@ module ActiveRecord
           config_hash = configuration_hash.dup.tap do |hash|
             hash[:tenant] = tenant_name
             hash[:database] = database_for(tenant_name)
+            hash[:host] = host_for(tenant_name) if configuration_hash.key?(:host)
             hash[:tenanted_config_name] = name
           end
           Tenanted::DatabaseConfigurations::TenantConfig.new(env_name, config_name, config_hash)
