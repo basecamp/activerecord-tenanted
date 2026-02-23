@@ -29,12 +29,12 @@ module ActiveRecord
 
           db = sprintf(database, tenant: tenant_name)
 
-          if %w[mysql2 trilogy].include?(adapter) && db.length > 64
-            raise BadTenantNameError, "Database name too long (max 64 characters): #{db.inspect}"
-          end
-
           if test_worker_id
             db = config_adapter.test_workerize(db, test_worker_id)
+          end
+
+          if %w[mysql2 trilogy].include?(adapter) && db.length > 64
+            raise BadTenantNameError, "Database name too long (max 64 characters): #{db.inspect}"
           end
 
           db
