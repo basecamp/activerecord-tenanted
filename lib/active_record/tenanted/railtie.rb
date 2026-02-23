@@ -137,6 +137,16 @@ module ActiveRecord
         end
       end
 
+      initializer "active_record_tenanted.shared_pool" do
+        ActiveSupport.on_load(:active_record_mysql2adapter) do
+          include ActiveRecord::Tenanted::SharedPool
+        end
+
+        ActiveSupport.on_load(:active_record_trilogyadapter) do
+          include ActiveRecord::Tenanted::SharedPool
+        end
+      end
+
       initializer "active_record_tenanted.action_mailer" do
         ActiveSupport.on_load(:action_mailer) do
           prepend ActiveRecord::Tenanted::Mailer
