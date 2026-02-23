@@ -84,7 +84,7 @@ module ActiveRecord
 
       private
         def shared_pool?
-          @config[:shared_pool] == true
+          @config[:shared_pool] == true && @config.key?(:tenanted_connection_class_name)
         end
 
         def tenanted_connection_class
