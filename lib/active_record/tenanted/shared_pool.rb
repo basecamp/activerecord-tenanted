@@ -47,6 +47,7 @@ module ActiveRecord
 
       def reset_to_fallback
         return unless shared_pool?
+        return unless Rails.application.config.active_record_tenanted.reset_tenant_on_checkin
 
         db = @config[:untenanted_database]
         internal_execute("USE #{quote_table_name(db)}", "TENANT RESET", allow_retry: false)
