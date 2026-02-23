@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "digest"
+
 module ActiveRecord
   module Tenanted
     module DatabaseAdapters # :nodoc:
@@ -73,7 +75,7 @@ module ActiveRecord
         end
 
         def acquire_ready_lock
-          lock_name = "tenanted:#{database_path}"
+          lock_name = "tenanted:#{Digest::SHA256.hexdigest(database_path)}"[0, 64]
 
           with_server_connection do |conn|
             result = conn.select_value("SELECT GET_LOCK(#{conn.quote(lock_name)}, 30)")
