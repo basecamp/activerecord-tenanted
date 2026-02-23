@@ -85,7 +85,20 @@ module ActiveRecord
             begin
               yield
             ensure
-              conn.select_value("SELECT RELEASE_LOCK(#{conn.quote(lock_name)})")
+              begin
+                conn.select_value("SELECT RELEASE_LOCK(#{conn.quote(lock_name)})")
+              rescue => error
+                # MySQL releases advisory locks automatically when the
+                # connection closes, so a failed RELEASE_LOCK is recoverable.
+                # Letting it propagate would mask the real operation result and
+                # could cause create_tenant to drop a successfully created
+                # database.
+                ActiveRecord::Base.logger&.warn(
+                  "ActiveRecord::Tenanted: failed to release advisory lock " \
+                  "#{lock_name.inspect}: #{error.message}; the lock will be " \
+                  "released when the connection closes"
+                )
+              end
             end
           end
         end
@@ -114,15 +127,29 @@ module ActiveRecord
 
         private
 
+          # Establishes an isolated connection to the MySQL server (without a
+          # specific database selected).  We intentionally avoid
+          # DatabaseTasks.with_temporary_connection here because that method
+          # replaces ActiveRecord::Base's global connection pool for the
+          # duration of the block — any Base-backed query running concurrently
+          # would hit the database-less server config.
+          #
+          # Instead we spin up a throwaway ConnectionHandler so the server
+          # connection never touches the global pool.
           def with_server_connection
             server_config_hash = db_config.configuration_hash.except(:database)
             server_db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(
               db_config.env_name, "#{db_config.name}_server", server_config_hash
             )
 
-            ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(server_db_config) do |conn|
+            handler = ActiveRecord::ConnectionAdapters::ConnectionHandler.new
+            pool = handler.establish_connection(server_db_config)
+
+            pool.with_connection do |conn|
               yield conn
             end
+          ensure
+            handler&.clear_all_connections!(:all)
           end
       end
     end

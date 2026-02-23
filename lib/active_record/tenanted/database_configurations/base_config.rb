@@ -27,7 +27,7 @@ module ActiveRecord
 
           config_adapter.validate_tenant_name(tenant_name)
 
-          db = sprintf(database, tenant: tenant_name)
+          db = database.gsub("%{tenant}", tenant_name)
 
           if test_worker_id
             db = config_adapter.test_workerize(db, test_worker_id)
@@ -43,7 +43,7 @@ module ActiveRecord
         def host_for(tenant_name)
           return unless host
 
-          sprintf(host, tenant: tenant_name.to_s)
+          host.gsub("%{tenant}", tenant_name.to_s)
         end
 
         def tenants
@@ -113,10 +113,14 @@ module ActiveRecord
               "because a single pool implies a single host (config #{name.inspect})."
           end
 
-          if configuration_hash[:prepared_statements] == true
+          ps_value = configuration_hash[:prepared_statements]
+          ps_cast = ActiveRecord::ConnectionAdapters::AbstractAdapter
+            .type_cast_config_to_boolean(ps_value)
+
+          if ps_cast != false
             raise ActiveRecord::Tenanted::TenantConfigurationError,
-              "Shared pool mode does not support prepared statements " \
-              "for #{name.inspect}. Set prepared_statements to false."
+              "Shared pool mode requires prepared_statements: false " \
+              "for #{name.inspect}."
           end
         end
       end
