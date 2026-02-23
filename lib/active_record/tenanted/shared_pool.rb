@@ -60,6 +60,21 @@ module ActiveRecord
           "from tenant #{tenant.inspect}: #{error.class}: #{error.message}"
       end
 
+      # Override the query_cache getter to ensure tenant namespace isolation
+      # on Rails' pinned cross-thread path. When a connection is pinned
+      # (transactional fixtures, system tests) and accessed from a non-owner
+      # thread, Rails returns pool.query_cache directly, bypassing the
+      # NamespaceStore wrapper set during checkout. This re-wraps it so
+      # cache keys remain namespaced by tenant database.
+      def query_cache
+        cache = super
+        if cache && shared_pool? && !cache.is_a?(NamespaceStore)
+          NamespaceStore.new(cache, -> { tenant_database || @config[:untenanted_database] })
+        else
+          cache
+        end
+      end
+
       def switch_tenant_database(tenant:, database:)
         return if self.tenant == tenant && tenant_database == database
 
