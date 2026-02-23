@@ -137,6 +137,14 @@ module ActiveRecord
           # Instead we spin up a throwaway ConnectionHandler so the server
           # connection never touches the global pool.
           def with_server_connection
+            if db_config.configuration_hash[:host]&.include?("%{tenant}")
+              raise TenantConfigurationError,
+                "Cannot connect to the MySQL server because the host contains " \
+                "an unresolved %{tenant} template. Host-templated configurations " \
+                "cannot enumerate tenant databases from a single server. Use a " \
+                "non-templated host, or configure shared_pool mode for single-host setups."
+            end
+
             server_config_hash = db_config.configuration_hash.except(:database)
             server_db_config = ActiveRecord::DatabaseConfigurations::HashConfig.new(
               db_config.env_name, "#{db_config.name}_server", server_config_hash

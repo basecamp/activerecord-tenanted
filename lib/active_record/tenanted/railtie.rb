@@ -158,6 +158,8 @@ module ActiveRecord
       end
 
       config.after_initialize do
+        ActiveRecord::Tenanted.base_configs.each(&:validate_shared_pool)
+
         ActiveRecord::QueryLogs.taggings = ActiveRecord::QueryLogs.taggings.merge(
           tenant: ->(context) { context[:connection].tenant }
         )
