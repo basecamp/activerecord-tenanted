@@ -82,6 +82,10 @@ module ActiveRecord
         end
       end.new.freeze
 
+      # Synthetic shard key used as the physical pool key in shared pool mode.
+      # All tenants map to one pool per role, keyed by this sentinel.
+      SHARED_POOL_SHARD = :__tenanted_shared_pool__
+
       CONNECTION_POOL_CREATION_LOCK = Thread::Mutex.new # :nodoc:
 
       class_methods do
@@ -160,9 +164,11 @@ module ActiveRecord
         def destroy_tenant(tenant_name)
           ActiveRecord::Base.logger.info "  DESTROY [tenant=#{tenant_name}] Destroying tenant database"
 
-          with_tenant(tenant_name, prohibit_shard_swapping: false) do
-            if retrieve_connection_pool(strict: false)
-              remove_connection
+          unless tenanted_root_config.shared_pool?
+            with_tenant(tenant_name, prohibit_shard_swapping: false) do
+              if retrieve_connection_pool(strict: false)
+                remove_connection
+              end
             end
           end
 
@@ -186,61 +192,75 @@ module ActiveRecord
         end
 
         def connection_pool(schema_version_check: true) # :nodoc:
-          if current_tenant
-            pool = retrieve_connection_pool(strict: false)
+          return Tenanted::UntenantedConnectionPool.new(tenanted_root_config, self) unless current_tenant
 
-            if pool.nil?
-              CONNECTION_POOL_CREATION_LOCK.synchronize do
-                # re-check now that we have the lock
-                pool = retrieve_connection_pool(strict: false)
+          shard = pool_shard_for(current_tenant)
+          pool = retrieve_connection_pool(shard: shard, strict: false)
 
-                if pool.nil?
-                  _create_tenanted_pool(schema_version_check: schema_version_check)
-                  pool = retrieve_connection_pool(strict: true)
-                end
+          unless pool
+            CONNECTION_POOL_CREATION_LOCK.synchronize do
+              pool = retrieve_connection_pool(shard: shard, strict: false)
+
+              unless pool
+                _create_tenanted_pool(shard, schema_version_check: schema_version_check)
+                pool = retrieve_connection_pool(shard: shard, strict: true)
               end
             end
-
-            pool
-          else
-            Tenanted::UntenantedConnectionPool.new(tenanted_root_config, self)
           end
+
+          pool
         end
 
         def tenanted_root_config # :nodoc:
           ActiveRecord::Base.configurations.resolve(tenanted_config_name.to_sym)
         end
 
-        def _create_tenanted_pool(schema_version_check: true) # :nodoc:
+        def _create_tenanted_pool(physical_shard, schema_version_check: true) # :nodoc:
           # ensure all classes use the same connection pool
-          return superclass._create_tenanted_pool unless connection_class?
+          return superclass._create_tenanted_pool(physical_shard, schema_version_check: schema_version_check) unless connection_class?
 
-          tenant = current_tenant
-          db_config = tenanted_root_config.new_tenant_config(tenant)
+          if tenanted_root_config.shared_pool?
+            tenanted_root_config.database_for(current_tenant)
 
-          unless db_config.config_adapter.database_exist?
-            raise TenantDoesNotExistError, "The database for tenant #{tenant.inspect} does not exist."
+            db_config = tenanted_root_config.build_shared_pool_config(connection_class_name: name)
+            connection_handler.establish_connection(
+              db_config,
+              owner_name: self,
+              role: current_role,
+              shard: physical_shard
+            )
+          else
+            tenant = current_tenant
+            db_config = tenanted_root_config.new_tenant_config(tenant)
+
+            unless db_config.config_adapter.database_exist?
+              raise TenantDoesNotExistError, "The database for tenant #{tenant.inspect} does not exist."
+            end
+
+            pool = establish_connection(db_config)
+
+            if schema_version_check
+              pending_migrations = pool.migration_context.open.pending_migrations
+              raise ActiveRecord::PendingMigrationError.new(pending_migrations: pending_migrations) if pending_migrations.any?
+            end
+
+            pool
           end
-          pool = establish_connection(db_config)
-
-          if schema_version_check
-            pending_migrations = pool.migration_context.open.pending_migrations
-            raise ActiveRecord::PendingMigrationError.new(pending_migrations: pending_migrations) if pending_migrations.any?
-          end
-
-          pool
         end
 
         private
-          def retrieve_connection_pool(strict:)
+          def retrieve_connection_pool(shard: pool_shard_for(current_tenant), strict:)
             role = current_role
-            shard = current_tenant
             connection_handler.retrieve_connection_pool(connection_specification_name, role:, shard:, strict:).tap do |pool|
               if pool
                 tenanted_connection_pools[[ shard, role ]] = pool
                 reap_connection_pools
               end
             end
+          end
+
+          def pool_shard_for(logical_tenant)
+            tenanted_root_config.shared_pool? ? SHARED_POOL_SHARD : logical_tenant
           end
 
           def reap_connection_pools
