@@ -120,17 +120,19 @@ module ActiveRecord
         def with_tenant(tenant_name, prohibit_shard_swapping: true, &block)
           tenant_name = tenant_name.to_s unless tenant_name == UNTENANTED_SENTINEL
 
-          if tenant_name == current_tenant
-            run_callbacks :with_tenant, &block
-          else
-            connection_class_for_self.connected_to(shard: tenant_name, role: ActiveRecord.writing_role) do
-              run_callbacks :with_tenant do
-                prohibit_shard_swapping(prohibit_shard_swapping) do
-                  log_tenant_tag(tenant_name, &block)
-                end
+          return run_callbacks(:with_tenant, &block) if tenant_name == current_tenant
+
+          connection_class_for_self.connected_to(shard: tenant_name, role: ActiveRecord.writing_role) do
+            ensure_shared_pool_tenant_switch
+
+            run_callbacks :with_tenant do
+              prohibit_shard_swapping(prohibit_shard_swapping) do
+                log_tenant_tag(tenant_name, &block)
               end
             end
           end
+        ensure
+          ensure_shared_pool_tenant_switch
         end
 
         def create_tenant(tenant_name, if_not_exists: false, &block)
@@ -263,6 +265,22 @@ module ActiveRecord
             tenanted_root_config.shared_pool? ? SHARED_POOL_SHARD : logical_tenant
           end
 
+          # Called from with_tenant (before/after) and :after set_current_tenant.
+          # Reconciles the leased connection to current_tenant in shared pool mode.
+          def ensure_shared_pool_tenant_switch
+            return unless tenanted_root_config.shared_pool?
+            return unless current_tenant
+
+            pool = retrieve_connection_pool(shard: SHARED_POOL_SHARD, strict: false)
+            return unless pool
+
+            conn = pool.active_connection
+            return unless conn
+
+            database = tenanted_root_config.database_for(current_tenant)
+            conn.switch_tenant_database(tenant: current_tenant.to_s, database: database)
+          end
+
           def reap_connection_pools
             while tenanted_connection_pools.size > tenanted_root_config.max_connection_pools
               info, _ = *tenanted_connection_pools.pop
@@ -293,6 +311,8 @@ module ActiveRecord
 
         define_callbacks :with_tenant
         define_callbacks :set_current_tenant
+
+        set_callback :set_current_tenant, :after, :ensure_shared_pool_tenant_switch
       end
 
       def tenanted?
