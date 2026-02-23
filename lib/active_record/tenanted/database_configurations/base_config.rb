@@ -128,13 +128,15 @@ module ActiveRecord
           end
 
           ps_value = configuration_hash[:prepared_statements]
-          ps_cast = ActiveRecord::ConnectionAdapters::AbstractAdapter
-            .type_cast_config_to_boolean(ps_value)
+          unless ps_value.nil?
+            ps_cast = ActiveRecord::ConnectionAdapters::AbstractAdapter
+              .type_cast_config_to_boolean(ps_value)
 
-          if ps_cast != false
-            raise ActiveRecord::Tenanted::TenantConfigurationError,
-              "Shared pool mode requires prepared_statements: false " \
-              "for #{name.inspect}."
+            if ps_cast != false
+              raise ActiveRecord::Tenanted::TenantConfigurationError,
+                "Shared pool mode requires prepared_statements: false " \
+                "for #{name.inspect}."
+            end
           end
         end
       end
