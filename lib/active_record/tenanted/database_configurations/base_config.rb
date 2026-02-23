@@ -71,6 +71,54 @@ module ActiveRecord
         def max_connection_pools
           (configuration_hash[:max_connection_pools] || DEFAULT_MAX_CONNECTION_POOLS).to_i
         end
+
+        def shared_pool?
+          configuration_hash[:shared_pool] == true
+        end
+
+        def fallback_database
+          configuration_hash[:untenanted_database].presence
+        end
+
+        def build_shared_pool_config(connection_class_name:)
+          validate_shared_pool
+
+          hash = configuration_hash.merge(
+            database: fallback_database,
+            tenanted_connection_class_name: connection_class_name,
+            tenanted_config_name: name
+          )
+
+          ActiveRecord::DatabaseConfigurations::HashConfig.new(env_name, "#{name}_shared_pool", hash)
+        end
+
+        def validate_shared_pool
+          return unless shared_pool?
+
+          unless %w[mysql2 trilogy].include?(adapter)
+            raise ActiveRecord::Tenanted::TenantConfigurationError,
+              "Shared pool mode requires the mysql2 or trilogy adapter, " \
+              "but #{name.inspect} is configured with #{adapter.inspect}."
+          end
+
+          if fallback_database.blank?
+            raise ActiveRecord::Tenanted::TenantConfigurationError,
+              "Shared pool mode requires an untenanted_database to be configured " \
+              "for #{name.inspect}."
+          end
+
+          if configuration_hash[:host]&.include?("%{tenant}")
+            raise ActiveRecord::Tenanted::TenantConfigurationError,
+              "Shared pool mode does not support host templating " \
+              "because a single pool implies a single host (config #{name.inspect})."
+          end
+
+          if configuration_hash[:prepared_statements] == true
+            raise ActiveRecord::Tenanted::TenantConfigurationError,
+              "Shared pool mode does not support prepared statements " \
+              "for #{name.inspect}. Set prepared_statements to false."
+          end
+        end
       end
     end
   end
