@@ -163,7 +163,7 @@ module ActiveRecord
         end
 
         def destroy_tenant(tenant_name)
-          ActiveRecord::Base.logger.info "  DESTROY [tenant=#{tenant_name}] Destroying tenant database"
+          ActiveRecord::Base.logger&.info "  DESTROY [tenant=#{tenant_name}] Destroying tenant database"
 
           unless tenanted_root_config.shared_pool?
             with_tenant(tenant_name, prohibit_shard_swapping: false) do
@@ -286,13 +286,14 @@ module ActiveRecord
               shard, role = *info
 
               connection_handler.remove_connection_pool(connection_specification_name, role:, shard:)
-              Rails.logger.info "  REAPED [tenant=#{shard} role=#{role}] Tenanted connection pool reaped to limit total connection pools"
+              ActiveRecord::Base.logger&.info "  REAPED [tenant=#{shard} role=#{role}] Tenanted connection pool reaped to limit total connection pools"
             end
           end
 
           def log_tenant_tag(tenant_name, &block)
-            if Rails.application.config.active_record_tenanted.log_tenant_tag
-              Rails.logger.tagged("tenant=#{tenant_name}", &block)
+            logger = ActiveRecord::Base.logger
+            if Rails.application.config.active_record_tenanted.log_tenant_tag && logger.respond_to?(:tagged)
+              logger.tagged("tenant=#{tenant_name}", &block)
             else
               yield
             end

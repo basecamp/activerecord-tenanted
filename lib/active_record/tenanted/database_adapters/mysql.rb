@@ -22,12 +22,13 @@ module ActiveRecord
               if match
                 match[1]
               else
-                Rails.logger.warn "ActiveRecord::Tenanted: Cannot parse tenant name from database #{name.inspect}"
+                ActiveRecord::Base.logger&.warn "ActiveRecord::Tenanted: Cannot parse tenant name from database #{name.inspect}"
                 nil
               end
             end
           end
-        rescue ActiveRecord::NoDatabaseError, ActiveRecord::StatementInvalid
+        rescue ActiveRecord::NoDatabaseError => error
+          ActiveRecord::Base.logger&.warn "ActiveRecord::Tenanted: tenant_databases returned empty due to NoDatabaseError: #{error.message}"
           []
         end
 
@@ -62,7 +63,8 @@ module ActiveRecord
               "SELECT schema_name FROM information_schema.schemata WHERE schema_name = #{conn.quote(database_path)}"
             ).any?
           end
-        rescue ActiveRecord::NoDatabaseError, ActiveRecord::StatementInvalid
+        rescue ActiveRecord::NoDatabaseError => error
+          ActiveRecord::Base.logger&.warn "ActiveRecord::Tenanted: database_exist? returned false due to NoDatabaseError: #{error.message}"
           false
         end
 
