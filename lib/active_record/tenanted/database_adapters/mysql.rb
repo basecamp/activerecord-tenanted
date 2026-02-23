@@ -71,7 +71,21 @@ module ActiveRecord
         end
 
         def acquire_ready_lock
-          yield
+          lock_name = "tenanted:#{database_path}"
+
+          with_server_connection do |conn|
+            result = conn.select_value("SELECT GET_LOCK(#{conn.quote(lock_name)}, 30)")
+            unless result == 1
+              raise ActiveRecord::LockWaitTimeout,
+                "Could not acquire advisory lock for tenant database #{database_path.inspect}"
+            end
+
+            begin
+              yield
+            ensure
+              conn.select_value("SELECT RELEASE_LOCK(#{conn.quote(lock_name)})")
+            end
+          end
         end
 
         def ensure_database_directory_exists

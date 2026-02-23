@@ -143,16 +143,15 @@ module ActiveRecord
           adapter.acquire_ready_lock do
             unless adapter.database_exist?
               adapter.create_database
+              created_db = true
 
               with_tenant(tenant_name) do
                 connection_pool(schema_version_check: false)
                 ActiveRecord::Tenanted::DatabaseTasks.new(base_config).migrate_tenant(tenant_name)
               end
-
-              created_db = true
             end
           rescue
-            adapter.drop_database
+            adapter.drop_database if created_db
             raise
           end
 
