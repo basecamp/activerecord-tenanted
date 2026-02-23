@@ -29,6 +29,12 @@ module ActiveRecord
 
           db = database.gsub("%{tenant}", tenant_name)
 
+          if db.match?(/%\{[^}]+\}/)
+            raise ActiveRecord::Tenanted::TenantConfigurationError,
+              "Database template contains an unrecognized token: #{database.inspect}. " \
+              "Only %{tenant} is supported."
+          end
+
           if test_worker_id
             db = config_adapter.test_workerize(db, test_worker_id)
           end
@@ -43,7 +49,15 @@ module ActiveRecord
         def host_for(tenant_name)
           return unless host
 
-          host.gsub("%{tenant}", tenant_name.to_s)
+          resolved = host.gsub("%{tenant}", tenant_name.to_s)
+
+          if resolved.match?(/%\{[^}]+\}/)
+            raise ActiveRecord::Tenanted::TenantConfigurationError,
+              "Host template contains an unrecognized token: #{host.inspect}. " \
+              "Only %{tenant} is supported."
+          end
+
+          resolved
         end
 
         def tenants
