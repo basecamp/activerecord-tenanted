@@ -8,8 +8,19 @@ updates:
   groups:
     development-dependencies:
       dependency-type: "development"
+  cooldown:
+    semver-major-days: 7
+    semver-minor-days: 3
+    semver-patch-days: 2
+    default-days: 7
 - package-ecosystem: github-actions
   directory: "/"
   schedule:
     interval: weekly
   open-pull-requests-limit: 10
+  groups:
+    github-actions:
+      patterns:
+        - "*"
+  cooldown:
+    default-days: 7
