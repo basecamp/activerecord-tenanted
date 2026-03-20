@@ -4,6 +4,8 @@ require "bundler/setup"
 require "active_support/continuous_integration"
 
 ActiveSupport::ContinuousIntegration.run do
+  step "Lint GitHub Actions workflows", "actionlint"
+  step "Audit GitHub Actions workflows", "zizmor ."
   step "Style", "bin/rubocop"
   step "Tests: Unit", "bin/test-unit"
   Bundler.with_original_env do
