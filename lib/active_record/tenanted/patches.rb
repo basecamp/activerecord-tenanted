@@ -24,8 +24,9 @@ module ActiveRecord
           end
       end
 
-      # TODO: This monkey patch shouldn't be necessary after 8.1 lands and the need for a
-      # connection is removed. For details see https://github.com/rails/rails/pull/54348
+      # This patch is only applied for Rails 8.1.x. Rails 8.2+ removed the with_connection
+      # call in _default_attributes (rails/rails#54333), making this patch unnecessary.
+      # See railtie.rb for the version check.
       module Attributes
         extend ActiveSupport::Concern
 

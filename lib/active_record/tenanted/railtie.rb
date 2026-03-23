@@ -95,7 +95,11 @@ module ActiveRecord
 
       initializer "active_record_tenanted.monkey_patches" do
         ActiveSupport.on_load(:active_record) do
-          prepend ActiveRecord::Tenanted::Patches::Attributes
+          # Rails 8.2+ removed the with_connection call in _default_attributes (rails/rails#54333),
+          # so this patch is only needed for Rails 8.1.x
+          if ActiveRecord.version < Gem::Version.new("8.2.0.alpha")
+            prepend ActiveRecord::Tenanted::Patches::Attributes
+          end
           ActiveRecord::Tasks::DatabaseTasks.prepend ActiveRecord::Tenanted::Patches::DatabaseTasks
         end
       end
