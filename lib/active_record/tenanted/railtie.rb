@@ -46,6 +46,21 @@ module ActiveRecord
       # Defaults to false in development and test environments, and true in all other environments.
       config.active_record_tenanted.log_tenant_tag = !Rails.env.local?
 
+      # Set this to false to skip the USE statement that resets connections to the
+      # fallback database on checkin in shared pool mode. When false, connections
+      # preserve their tenant database across checkout/checkin cycles, and the
+      # checkout callback switches only when the next checkout targets a different
+      # tenant. This eliminates most USE roundtrips in the per-query connection
+      # lifecycle.
+      #
+      # The checkout callback (apply_current_tenant) validates the tenant on every
+      # checkout regardless of this setting, so tenant safety is maintained.
+      #
+      # Only applies when shared_pool: true is set in database.yml.
+      #
+      # Defaults to true (always reset on checkin).
+      config.active_record_tenanted.reset_tenant_on_checkin = true
+
       # Set this to override the default tenant name used in development and test environments.
       #
       # This is the default tenant name used by database tasks and in the Rails console. In both
@@ -137,6 +152,16 @@ module ActiveRecord
         end
       end
 
+      initializer "active_record_tenanted.shared_pool" do
+        ActiveSupport.on_load(:active_record_mysql2adapter) do
+          include ActiveRecord::Tenanted::SharedPool
+        end
+
+        ActiveSupport.on_load(:active_record_trilogyadapter) do
+          include ActiveRecord::Tenanted::SharedPool
+        end
+      end
+
       initializer "active_record_tenanted.action_mailer" do
         ActiveSupport.on_load(:action_mailer) do
           prepend ActiveRecord::Tenanted::Mailer
@@ -148,6 +173,8 @@ module ActiveRecord
       end
 
       config.after_initialize do
+        ActiveRecord::Tenanted.base_configs.each(&:validate_shared_pool)
+
         ActiveRecord::QueryLogs.taggings = ActiveRecord::QueryLogs.taggings.merge(
           tenant: ->(context) { context[:connection].tenant }
         )
