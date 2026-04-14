@@ -780,6 +780,66 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "cross-tenant associations with non-standard association name" do
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_one :notice, class_name: "Announcement", foreign_key: "user_id", tenant_key: :tenant_id
+      end
+
+      test "has_one resolves class_name correctly when association name differs" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Notice test", tenant_id: "foo", user_id: user.id)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_nil user.notice
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_not_nil user.notice
+          assert_equal "Notice test", user.notice.message
+        end
+      end
+    end
+
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        User.has_many :notices, class_name: "Announcement", foreign_key: "user_id", tenant_key: :tenant_id
+      end
+
+      test "has_many resolves class_name correctly when association name differs" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Notice 1", tenant_id: "foo", user_id: user.id)
+          Announcement.create!(message: "Notice 2", tenant_id: "foo", user_id: user.id)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          user = User.create!(email: "user@bar.example.org")
+
+          assert_equal 0, user.notices.count
+        end
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_equal 2, user.notices.count
+        end
+      end
+    end
+  end
+
   describe "cross-tenant associations with belongs_to" do
     for_each_scenario do
       setup do
