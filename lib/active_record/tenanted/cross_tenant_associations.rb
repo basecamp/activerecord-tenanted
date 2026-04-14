@@ -18,27 +18,24 @@ module ActiveRecord
           # For now association methods are identical
           def define_enhanced_association(association_type, name, scope, **options)
             tenant_key = options.delete(:tenant_key)
-            custom_options = { tenant_key: tenant_key || :tenant_id }
-
-            enhanced_scope = enhance_cross_tenant_association(name, scope, custom_options)
+            class_name = options[:class_name]
+            enhanced_scope = enhance_cross_tenant_association(name, scope, tenant_key: tenant_key || :tenant_id, class_name: class_name)
             method(association_type).super_method.call(name, enhanced_scope, **options)
           end
 
-          def enhance_cross_tenant_association(name, scope, options)
-            target_class = options[:class_name]&.safe_constantize || name.to_s.classify.safe_constantize
+          def enhance_cross_tenant_association(name, scope, tenant_key:, class_name: nil)
+            resolved_class_name = class_name || name.to_s.classify
 
-            return scope unless target_class
+            ->(record) {
+              target_class = resolved_class_name.constantize
+              base_scope = scope ? target_class.instance_exec(&scope) : target_class.all
 
-            unless target_class.tenanted?
-              tenant_key = options[:tenant_key]
-
-              return ->(record) {
-                base_scope = scope ? target_class.instance_exec(&scope) : target_class.all
+              if target_class.tenanted?
+                base_scope
+              else
                 base_scope.where(tenant_key => record.tenant)
-              }
-            end
-
-            scope
+              end
+            }
           end
       end
     end

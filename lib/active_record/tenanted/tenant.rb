@@ -233,7 +233,6 @@ module ActiveRecord
           pool
         end
 
-
         private
           def retrieve_connection_pool(strict:)
             role = current_role
