@@ -906,6 +906,129 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "cross-tenant belongs_to from untenanted to tenanted" do
+    for_each_scenario do
+      setup do
+        ActiveRecord::Base.connection.add_column :announcements, :tenant_id, :string
+        ActiveRecord::Base.connection.add_column :announcements, :user_id, :integer
+
+        Announcement.belongs_to :user, tenant_key: :tenant_id, optional: true
+      end
+
+      test "belongs_to read automatically switches to correct tenant" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Foo announcement", tenant_id: "foo", user_id: user.id)
+        end
+
+        announcement = Announcement.find_by(message: "Foo announcement")
+
+        TenantedApplicationRecord.with_tenant("foo") do
+          assert_not_nil announcement.user
+          assert_equal "user@foo.example.org", announcement.user.email
+        end
+      end
+
+      test "belongs_to read returns nil when tenant_key is nil" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Test announcement", tenant_id: "foo", user_id: user.id)
+        end
+
+        announcement = Announcement.find_by(message: "Test announcement")
+        announcement.update_column(:tenant_id, nil)
+
+        assert_nil announcement.user
+      end
+
+      test "belongs_to read works outside of any tenant context" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Foo announcement", tenant_id: "foo", user_id: user.id)
+        end
+
+        announcement = Announcement.find_by(message: "Foo announcement")
+
+        assert_not_nil announcement.user
+        assert_equal "user@foo.example.org", announcement.user.email
+      end
+
+      test "belongs_to read transparently switches when in a different tenant context" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+          Announcement.create!(message: "Foo announcement", tenant_id: "foo", user_id: user.id)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user@bar.example.org")
+        end
+
+        announcement = Announcement.find_by(message: "Foo announcement")
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          loaded_user = announcement.user
+
+          assert_not_nil loaded_user
+          assert_equal "user@foo.example.org", loaded_user.email
+          assert_equal "foo", loaded_user.tenant
+        end
+      end
+
+      test "belongs_to write auto-populates tenant column from untenanted model" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+
+          announcement = Announcement.new(message: "Test announcement")
+          announcement.user = user
+
+          assert_equal "foo", announcement.tenant_id
+        end
+      end
+
+      test "belongs_to write auto-populates tenant column when creating with association" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "user@foo.example.org")
+
+          announcement = Announcement.create!(message: "Test announcement", user: user)
+
+          assert_equal "foo", announcement.tenant_id
+          assert_equal user.id, announcement.user_id
+        end
+      end
+
+      test "belongs_to with custom tenant_key reads from correct tenant" do
+        ActiveRecord::Base.connection.add_column :announcements, :author_tenant, :string
+
+        Announcement.belongs_to :author, class_name: "User", foreign_key: "user_id", tenant_key: :author_tenant, optional: true
+
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "author@foo.example.org")
+          Announcement.create!(message: "Custom key announcement", author_tenant: "foo", user_id: user.id)
+        end
+
+        announcement = Announcement.find_by(message: "Custom key announcement")
+
+        assert_not_nil announcement.author
+        assert_equal "author@foo.example.org", announcement.author.email
+      end
+
+      test "belongs_to with custom tenant_key auto-populates on write" do
+        ActiveRecord::Base.connection.add_column :announcements, :author_tenant, :string
+
+        Announcement.belongs_to :author, class_name: "User", foreign_key: "user_id", tenant_key: :author_tenant, optional: true
+
+        TenantedApplicationRecord.create_tenant("foo") do
+          user = User.create!(email: "author@foo.example.org")
+
+          announcement = Announcement.new(message: "Custom key announcement")
+          announcement.author = user
+
+          assert_equal "foo", announcement.author_tenant
+        end
+      end
+    end
+  end
+
   describe ".without_tenant" do
     for_each_scenario do
       setup do
