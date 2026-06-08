@@ -9,7 +9,8 @@ gem "rails", github: "rails/rails", branch: "main"
 group :development, :test do
   gem "appraisal", "2.5.0", require: false
   gem "debug", "1.11.1"
-  gem "minitest", "< 7"
+  gem "minitest", "6.0.6"
+  gem "minitest-mock", "5.27.0"
   gem "minitest-parallel_fork", "2.1.1", require: false
   gem "sqlite3", "2.9.4"
 end
