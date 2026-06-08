@@ -104,8 +104,8 @@ PATH
   remote: .
   specs:
     activerecord-tenanted (0.6.0)
-      activerecord (>= 8.1.0)
-      railties (>= 8.1.0)
+      activerecord (>= 8.1.2.1)
+      railties (>= 8.1.2.1)
       zeitwerk
 
 GEM
