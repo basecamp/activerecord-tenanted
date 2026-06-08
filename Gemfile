@@ -8,17 +8,17 @@ gem "rails", github: "rails/rails", branch: "main"
 
 group :development, :test do
   gem "appraisal", "2.5.0", require: false
-  gem "debug", "1.11.0"
-  gem "minitest", "< 6"
-  gem "minitest-parallel_fork", "2.1.0", require: false
-  gem "sqlite3", "2.7.4"
+  gem "debug", "1.11.1"
+  gem "minitest", "< 7"
+  gem "minitest-parallel_fork", "2.1.1", require: false
+  gem "sqlite3", "2.9.4"
 end
 
 group :rubocop do
-  gem "rubocop-minitest", "0.38.2", require: false
+  gem "rubocop-minitest", "0.39.1", require: false
   gem "rubocop-packaging", "0.6.0", require: false
   gem "rubocop-performance", "1.26.1", require: false
-  gem "rubocop-rails", "2.33.4", require: false
+  gem "rubocop-rails", "2.35.3", require: false
   gem "rubocop-rake", "0.7.1", require: false
 end
 
