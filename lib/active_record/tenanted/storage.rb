@@ -17,12 +17,31 @@ module ActiveRecord
         end
 
         def path_for(key)
-          if ActiveRecord::Tenanted.connection_class && key.include?("/")
-            tenant, key = key.split("/", 2)
-            File.join(root, tenant, folder_for(key), key)
-          else
-            super
+          return super unless ActiveRecord::Tenanted.connection_class && key.include?("/")
+
+          if key.split("/").intersect?(%w[. ..])
+            raise ActiveStorage::InvalidKeyError, "key has path traversal segments"
           end
+
+          tenant, key = key.split("/", 2)
+
+          if tenant.blank? || key.blank?
+            raise ActiveStorage::InvalidKeyError, "key has a blank segment"
+          end
+
+          begin
+            path = File.expand_path(File.join(root, tenant, folder_for(key), key))
+          rescue ArgumentError
+            raise ActiveStorage::InvalidKeyError, "key is an invalid string"
+          end
+
+          unless path.start_with?(File.expand_path(root) + "/")
+            raise ActiveStorage::InvalidKeyError, "key is outside of disk service root"
+          end
+
+          path
+        rescue Encoding::CompatibilityError
+          raise ActiveStorage::InvalidKeyError, "key has incompatible encoding"
         end
       end
 

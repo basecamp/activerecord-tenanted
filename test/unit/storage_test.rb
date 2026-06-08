@@ -99,5 +99,45 @@ describe ActiveRecord::Tenanted::Storage do
         end
       end
     end
+
+    describe "path traversal" do
+      with_active_storage do
+        let(:service) { ActiveStorage::Service::DiskService.new(root: "/path/to/%{tenant}/storage") }
+
+        [
+          [ "directory escape",   "../../../../etc/passwd",   "key has path traversal segments" ],
+          [ "head fake escape",   "foo/../../../etc/passwd",  "key has path traversal segments" ],
+          [ "sibling directory",  "../secret/token",          "key has path traversal segments" ],
+          [ "invalid . segment",  "foo/./bar",                "key has path traversal segments" ],
+          [ "invalid .. segment", "foo/../foo/bar",           "key has path traversal segments" ],
+          [ "folder_for escape",  "foo/....secret",           "key is outside of disk service root" ],
+          [ "embedded null byte", "foo/bar\x00.jpg",          "key is an invalid string" ],
+          [ "empty key",          "foo/",                     "key has a blank segment" ],
+          [ "empty tenant",       "/token",                   "key has a blank segment" ],
+          [ "incompat encoding",  "a/b".encode("UTF-16LE"),   "key has incompatible encoding" ],
+        ].each do |test_title, malicious_key, error_message|
+          test "path_for raises InvalidKeyError for #{test_title}" do
+            ActiveRecord::Tenanted.stub(:connection_class, TenantedApplicationRecord) do
+              TenantedApplicationRecord.create_tenant("foo") do
+                e = assert_raises(ActiveStorage::InvalidKeyError) do
+                  service.path_for(malicious_key)
+                end
+
+                assert_includes e.message, error_message
+              end
+            end
+          end
+        end
+
+        test "path_for keeps a benign tenant key inside the resolved root" do
+          ActiveRecord::Tenanted.stub(:connection_class, TenantedApplicationRecord) do
+            TenantedApplicationRecord.create_tenant("foo") do
+              path = service.path_for("foo/abc123def456")
+              assert path.start_with?(File.expand_path(service.root) + "/")
+            end
+          end
+        end
+      end
+    end
   end
 end
