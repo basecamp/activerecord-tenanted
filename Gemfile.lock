@@ -183,6 +183,7 @@ GEM
     minitest (6.0.6)
       drb (~> 2.0)
       prism (~> 1.5)
+    minitest-mock (5.27.0)
     minitest-parallel_fork (2.1.1)
       minitest (>= 5.15.0)
     net-imap (0.6.4)
@@ -357,7 +358,8 @@ DEPENDENCIES
   debug (= 1.11.1)
   importmap-rails
   jbuilder
-  minitest (< 7)
+  minitest (= 6.0.6)
+  minitest-mock (= 5.27.0)
   minitest-parallel_fork (= 2.1.1)
   propshaft
   puma (>= 5.0)
