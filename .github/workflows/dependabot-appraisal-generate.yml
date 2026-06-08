@@ -1,0 +1,66 @@
+name: Regenerate appraisal gemfiles
+
+concurrency:
+  group: "${{github.workflow}}-${{github.ref}}"
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - "dependabot/bundler/**"
+    paths:
+      - Gemfile
+      - Gemfile.lock
+
+permissions: {}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # checkout the dependabot branch
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: ruby/setup-ruby@afeafc3d1ab54a631816aba4c914a0081c12ff2f # v1.310.0
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Regenerate gemfiles from Appraisals
+        run: bundle exec appraisal generate
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gemfiles
+          path: gemfiles/
+          retention-days: 1
+
+  commit:
+    needs: generate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push regenerated gemfiles to the dependabot branch
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: gemfiles
+          path: gemfiles/
+
+      - name: Commit regenerated gemfiles
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git add gemfiles/
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "Regenerate appraisal gemfiles"
+            git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"
+          fi
