@@ -40,6 +40,34 @@ Isolate the integration testing suite with `bin/test-integration`, which:
   - run the integration tests
 
 
+## Testing against multiple Rails versions
+
+The matrix is defined in `Appraisals` ([Appraisal](https://github.com/thoughtbot/appraisal)).
+
+### Setup
+
+```bash
+bundle exec appraisal generate
+bundle exec appraisal install
+```
+
+### Running tests
+
+Against a specific single version of Rails:
+
+```bash
+bundle exec appraisal rails-8-1 bin/test-unit
+bundle exec appraisal rails-8-1 bin/test-integration
+```
+
+Against the entire matrix of Rails versions:
+
+```bash
+bundle exec appraisal bin/test-unit
+bundle exec appraisal bin/test-integration
+```
+
+
 ## Making a release
 
 A quick checklist for releasing activerecord-tenanted

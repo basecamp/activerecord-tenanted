@@ -49,10 +49,32 @@ jobs:
           bundler-cache: true
       - run: bin/rubocop -f github
 
-  unit:
+  rails_versions:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      gemfiles: ${{ steps.gemfiles.outputs.gemfiles }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - id: gemfiles
+        run: echo "gemfiles=$(ruby -rjson -e 'puts Dir["gemfiles/*.gemfile"].map { |f| File.basename(f, ".gemfile") }.sort.to_json')" >> "$GITHUB_OUTPUT"
+
+  unit:
+    name: "unit (${{ matrix.gemfile }})"
+    needs: rails_versions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        gemfile: ${{ fromJSON(needs.rails_versions.outputs.gemfiles) }}
+    continue-on-error: ${{ matrix.gemfile == 'rails_edge' }}
+    env:
+      BUNDLE_GEMFILE: gemfiles/${{ matrix.gemfile }}.gemfile
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
@@ -64,9 +86,18 @@ jobs:
       - run: bin/test-unit
 
   integration:
+    name: "integration (${{ matrix.gemfile }})"
+    needs: rails_versions
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        gemfile: ${{ fromJSON(needs.rails_versions.outputs.gemfiles) }}
+    continue-on-error: ${{ matrix.gemfile == 'rails_edge' }}
+    env:
+      BUNDLE_GEMFILE: gemfiles/${{ matrix.gemfile }}.gemfile
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
