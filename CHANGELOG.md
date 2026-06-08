@@ -1,6 +1,14 @@
 # `activerecord-tenanted` Changelog
 
-## next / unreleased
+## v0.7.0 / 2026-06-08
+
+### Security
+
+- Fixed this gem's override of `ActiveStorage::Service::DiskService#path_for` to match the upstream Rails 8.1.2.1 behavior preventing path traversal. See https://github.com/basecamp/activerecord-tenanted/security/advisories/GHSA-pmwx-rm49-xv39 for more information. @flavorjones
+
+### Dependencies
+
+- Bumped the minimum Rails version requirement to `>= 8.1.2.1` to simplify the `DiskService#path_for` fix. @flavorjones
 
 ### Added
 
@@ -11,6 +19,11 @@
 
 - `.current_tenant = nil` now clears the tenant context, properly setting the shard to `UNTENANTED_SENTINEL` instead of `""` @flavorjones
 - `Tenanted::DiskService#path_for` now handles keys without a tenant prefix (e.g., from `ActiveStorage::FixtureSet.blob`) by falling back to standard DiskService behavior. @flavorjones
+
+### Developer infrastructure
+
+- Hardened Github Actions workflows. @flavorjones
+- Added matrix testing against Rails 8.1 and Rails edge. @flavorjones
 
 
 ## v0.6.0 / 2025-11-05
