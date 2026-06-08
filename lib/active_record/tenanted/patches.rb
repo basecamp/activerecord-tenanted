@@ -24,8 +24,6 @@ module ActiveRecord
           end
       end
 
-      # TODO: This monkey patch shouldn't be necessary after 8.1 lands and the need for a
-      # connection is removed. For details see https://github.com/rails/rails/pull/54348
       module Attributes
         extend ActiveSupport::Concern
 
@@ -42,6 +40,18 @@ module ActiveRecord
               apply_pending_attribute_modifications(attribute_set)
               attribute_set
             end
+          end
+        end
+
+        class << self
+          # This monkey patch isn't necessary after 8.1 removed the need for a connection.
+          # For details see https://github.com/rails/rails/pull/54348
+          def needs_patch?
+            Gem::Requirement.new("~> 8.1.0").satisfied_by?(Gem::Version.new(Rails::VERSION::STRING))
+          end
+
+          def apply_patch
+            ActiveRecord::Base.prepend(self) if needs_patch?
           end
         end
       end

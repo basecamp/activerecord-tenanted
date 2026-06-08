@@ -8,6 +8,8 @@ ENV["VERBOSE"] = "false" # suppress database task output
 require "rails"
 require "rails/test_help" # should be before active_record is loaded to avoid schema/fixture setup
 
+puts "Testing against Rails #{Rails.version}"
+
 class TestSuiteRailtie < ::Rails::Railtie
   initializer "turn off the Rails integrations when running this test suite" do
     ActiveSupport.on_load(:active_record_tenanted) do

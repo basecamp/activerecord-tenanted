@@ -2,7 +2,7 @@
 
 GEM_PATH     = File.expand_path(File.join(__dir__, "../"))
 SMARTY_PATH  = File.join(GEM_PATH, "test/smarty")
-GEMFILE      = File.join(GEM_PATH, "Gemfile")
+GEMFILE      = File.expand_path(ENV["BUNDLE_GEMFILE"] || File.join(GEM_PATH, "Gemfile"))
 OVERLAY_PATH = File.join(GEM_PATH, "test/integration")
 
 TEST_ARGS = ARGV.dup
