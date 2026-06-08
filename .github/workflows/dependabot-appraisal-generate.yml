@@ -1,5 +1,9 @@
 name: Regenerate appraisal gemfiles
 
+concurrency:
+  group: "${{github.workflow}}-${{github.ref}}"
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -14,7 +18,7 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: read # checkout the dependabot branch
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -38,7 +42,7 @@ jobs:
     needs: generate
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # push regenerated gemfiles to the dependabot branch
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
