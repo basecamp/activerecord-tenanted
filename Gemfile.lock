@@ -1,6 +1,6 @@
 GIT
   remote: https://github.com/rails/rails.git
-  revision: 81e325e9edac428c98b40327ae006799ed7b3790
+  revision: 361b2271c35ab44bfc28770003f99276f9e6d026
   branch: main
   specs:
     actioncable (8.2.0.alpha)
@@ -164,7 +164,7 @@ GEM
     jbuilder (2.15.1)
       actionview (>= 7.0.0)
       activesupport (>= 7.0.0)
-    json (2.19.8)
+    json (2.19.9)
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
     logger (1.7.0)
@@ -186,7 +186,7 @@ GEM
     minitest-mock (5.27.0)
     minitest-parallel_fork (2.1.1)
       minitest (>= 5.15.0)
-    net-imap (0.6.4)
+    net-imap (0.6.4.1)
       date
       net-protocol
     net-pop (0.1.2)
