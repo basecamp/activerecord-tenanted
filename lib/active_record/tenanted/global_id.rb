@@ -16,7 +16,7 @@ module ActiveRecord
 
         def locate(gid, options = {})
           ensure_tenant_context_safety(gid, gid.model_class)
-          super
+          super(gid)
         end
 
         def locate_many(gids, options = {})
