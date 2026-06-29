@@ -56,6 +56,14 @@ end
 
 describe ActiveRecord::Tenanted::GlobalId::Locator do
   for_each_scenario do
+    describe "#model_class" do
+      test "returns the GID model class" do
+        gid = GlobalID.parse("gid://dummy/User/1?tenant=foo")
+
+        assert_equal(User, ActiveRecord::Tenanted::GlobalId::Locator.new.model_class(gid))
+      end
+    end
+
     describe "given an untenanted GID" do
       test "raises MissingTenantError" do
         gid = GlobalID.parse("gid://dummy/User/1")

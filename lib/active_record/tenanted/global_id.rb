@@ -10,20 +10,24 @@ module ActiveRecord
       end
 
       class Locator
+        def model_class(gid)
+          gid.model_name.constantize
+        end
+
         def locate(gid, options = {})
-          ensure_tenant_context_safety(gid)
-          gid.model_class.find(gid.model_id)
+          gid_model_class = model_class(gid)
+          ensure_tenant_context_safety(gid, gid_model_class)
+          gid_model_class.find(gid.model_id)
         end
 
         private
-          def ensure_tenant_context_safety(gid)
-            model_class = gid.model_class
-            return unless model_class.tenanted?
+          def ensure_tenant_context_safety(gid, gid_model_class)
+            return unless gid_model_class.tenanted?
 
             gid_tenant = gid.tenant
             raise MissingTenantError, "Tenant not present in #{gid.to_s.inspect}" unless gid_tenant
 
-            current_tenant = model_class.current_tenant.presence
+            current_tenant = gid_model_class.current_tenant.presence
             raise NoTenantError, "Cannot connect to a tenanted database while untenanted (#{gid})" unless current_tenant
 
             if gid_tenant != current_tenant
