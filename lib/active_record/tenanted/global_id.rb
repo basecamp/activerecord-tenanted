@@ -9,21 +9,30 @@ module ActiveRecord
         params && params[:tenant]
       end
 
-      class Locator
+      class Locator < ::GlobalID::Locator::BaseLocator
+        def model_class(gid)
+          gid.model_name.constantize
+        end
+
         def locate(gid, options = {})
           ensure_tenant_context_safety(gid)
-          gid.model_class.find(gid.model_id)
+          super
+        end
+
+        def locate_many(gids, options = {})
+          gids.each { |gid| ensure_tenant_context_safety(gid) }
+          super
         end
 
         private
           def ensure_tenant_context_safety(gid)
-            model_class = gid.model_class
-            return unless model_class.tenanted?
+            gid_model_class = model_class(gid)
+            return unless gid_model_class.tenanted?
 
             gid_tenant = gid.tenant
             raise MissingTenantError, "Tenant not present in #{gid.to_s.inspect}" unless gid_tenant
 
-            current_tenant = model_class.current_tenant.presence
+            current_tenant = gid_model_class.current_tenant.presence
             raise NoTenantError, "Cannot connect to a tenanted database while untenanted (#{gid})" unless current_tenant
 
             if gid_tenant != current_tenant

@@ -56,6 +56,14 @@ end
 
 describe ActiveRecord::Tenanted::GlobalId::Locator do
   for_each_scenario do
+    describe "#model_class" do
+      test "returns the GID model class" do
+        gid = GlobalID.parse("gid://dummy/User/1?tenant=foo")
+
+        assert_equal(User, ActiveRecord::Tenanted::GlobalId::Locator.new.model_class(gid))
+      end
+    end
+
     describe "given an untenanted GID" do
       test "raises MissingTenantError" do
         gid = GlobalID.parse("gid://dummy/User/1")
@@ -63,6 +71,16 @@ describe ActiveRecord::Tenanted::GlobalId::Locator do
         TenantedApplicationRecord.create_tenant("foo") do
           assert_raises(ActiveRecord::Tenanted::MissingTenantError) do
             ActiveRecord::Tenanted::GlobalId::Locator.new.locate(gid)
+          end
+        end
+      end
+
+      test "raises MissingTenantError when locating many" do
+        gid = GlobalID.parse("gid://dummy/User/1")
+
+        TenantedApplicationRecord.create_tenant("foo") do
+          assert_raises(ActiveRecord::Tenanted::MissingTenantError) do
+            ActiveRecord::Tenanted::GlobalId::Locator.new.locate_many([ gid ])
           end
         end
       end
@@ -75,6 +93,19 @@ describe ActiveRecord::Tenanted::GlobalId::Locator do
           user = ActiveRecord::Tenanted::GlobalId::Locator.new.locate(original_user.to_global_id)
 
           assert_equal(original_user, user)
+        end
+      end
+
+      test "loads many correctly" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          original_users = [
+            User.create!(email: "user1@example.org"),
+            User.create!(email: "user2@example.org"),
+          ]
+          user_gids = original_users.map(&:to_global_id)
+
+          assert_equal(original_users, ActiveRecord::Tenanted::GlobalId::Locator.new.locate_many(user_gids))
+          assert_equal(original_users, GlobalID::Locator.locate_many(user_gids))
         end
       end
     end
@@ -91,6 +122,18 @@ describe ActiveRecord::Tenanted::GlobalId::Locator do
           end
         end
       end
+
+      test "raises WrongTenantError when locating many" do
+        original_user = TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            ActiveRecord::Tenanted::GlobalId::Locator.new.locate_many([ original_user.to_global_id ])
+          end
+        end
+      end
     end
 
     describe "in untenanted context" do
@@ -102,6 +145,18 @@ describe ActiveRecord::Tenanted::GlobalId::Locator do
         TenantedApplicationRecord.without_tenant do
           assert_raises(ActiveRecord::Tenanted::NoTenantError) do
             ActiveRecord::Tenanted::GlobalId::Locator.new.locate(original_user.to_global_id)
+          end
+        end
+      end
+
+      test "raises NoTenantError when locating many" do
+        original_user = TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@example.org")
+        end
+
+        TenantedApplicationRecord.without_tenant do
+          assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+            ActiveRecord::Tenanted::GlobalId::Locator.new.locate_many([ original_user.to_global_id ])
           end
         end
       end
