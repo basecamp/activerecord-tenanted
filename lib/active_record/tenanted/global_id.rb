@@ -15,18 +15,17 @@ module ActiveRecord
         end
 
         def locate(gid, options = {})
-          ensure_tenant_context_safety(gid)
+          ensure_tenant_context_safety(gid, gid.model_class)
           super
         end
 
         def locate_many(gids, options = {})
-          gids.each { |gid| ensure_tenant_context_safety(gid) }
+          gids.each { |gid| ensure_tenant_context_safety(gid, gid.model_class) }
           super
         end
 
         private
-          def ensure_tenant_context_safety(gid)
-            gid_model_class = model_class(gid)
+          def ensure_tenant_context_safety(gid, gid_model_class)
             return unless gid_model_class.tenanted?
 
             gid_tenant = gid.tenant
