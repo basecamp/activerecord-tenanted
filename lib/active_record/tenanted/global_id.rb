@@ -15,6 +15,10 @@ module ActiveRecord
           gid.model_class.find(gid.model_id)
         end
 
+        def model_class(gid)
+          gid.model_name.constantize
+        end
+
         private
           def ensure_tenant_context_safety(gid)
             model_class = gid.model_class

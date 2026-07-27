@@ -1,5 +1,11 @@
 # `activerecord-tenanted` Changelog
 
+## Unreleased
+
+### Fixed
+
+- Add `ActiveRecord::Tenanted::GlobalId::Locator#model_class` to resolve deprecation warning @seanpdoyle
+
 ## v0.7.0 / 2026-06-08
 
 ### Security

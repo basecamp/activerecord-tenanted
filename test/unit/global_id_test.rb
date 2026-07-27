@@ -69,6 +69,15 @@ describe ActiveRecord::Tenanted::GlobalId::Locator do
     end
 
     describe "in correct tenanted context" do
+      test "resolves .model_class" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          original_user = User.create!(email: "user1@example.org")
+          model_class = ActiveRecord::Tenanted::GlobalId::Locator.new.model_class(original_user.to_global_id)
+
+          assert_equal(User, model_class)
+        end
+      end
+
       test "loads correctly" do
         TenantedApplicationRecord.create_tenant("foo") do
           original_user = User.create!(email: "user1@example.org")
