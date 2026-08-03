@@ -1276,6 +1276,53 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "#==" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      let(:foo_user) { TenantedApplicationRecord.with_tenant("foo") { User.first } }
+      let(:bar_user) { TenantedApplicationRecord.with_tenant("bar") { User.first } }
+
+      test "records from the same tenant with the same id are equal" do
+        other = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_equal(foo_user, other)
+      end
+
+      test "records from the same tenant with the same id have the same hash" do
+        other = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_equal(foo_user.hash, other.hash)
+      end
+
+      test "records from different tenants with the same id are not equal" do
+        assert_equal(foo_user.id, bar_user.id)
+
+        assert_not_equal(foo_user, bar_user)
+      end
+
+      test "records from different tenants with the same id are not eql?" do
+        assert_equal(foo_user.id, bar_user.id)
+
+        assert_not(foo_user.eql?(bar_user))
+      end
+
+      test "records from different tenants with the same id have different hashes" do
+        assert_equal(foo_user.id, bar_user.id)
+
+        assert_not_equal(foo_user.hash, bar_user.hash)
+      end
+    end
+  end
+
   describe "#cache_key" do
     for_each_scenario do
       describe "created in untenanted context" do

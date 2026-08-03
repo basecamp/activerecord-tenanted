@@ -17,6 +17,15 @@ module ActiveRecord
         tenant ? "#{tenant}/#{super}" : super
       end
 
+      def ==(other)
+        super && tenant == other.tenant
+      end
+      alias eql? ==
+
+      def hash
+        [ super, tenant ].hash
+      end
+
       def inspect
         return super unless tenant
 
