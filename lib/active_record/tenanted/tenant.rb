@@ -9,7 +9,8 @@ module ActiveRecord
       prepended do
         attr_reader :tenant
 
-        before_save :ensure_tenant_context_safety
+        before_save :ensure_tenant_context_safety, prepend: true
+        before_destroy :ensure_tenant_context_safety, prepend: true
       end
 
       def cache_key
@@ -31,6 +32,12 @@ module ActiveRecord
       end
 
       def reload(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
+      def delete
         ensure_tenant_context_safety
 
         super
