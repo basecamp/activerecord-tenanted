@@ -105,6 +105,117 @@ describe "Serializing tenanted records" do
   end
 end
 
+describe "Serializing tenanted records with a loaded association" do
+  with_scenario(:primary_db, :primary_record) do
+    setup do
+      with_migration "20250830152220_create_posts.rb"
+      User.has_many :posts
+      Post.belongs_to :user
+
+      TenantedApplicationRecord.create_tenant("foo") do
+        user = User.create!(email: "user1@foo.example.org")
+        Post.create!(title: "Post 1 foo", user: user)
+        Post.create!(title: "Post 2 foo", user: user)
+      end
+
+      TenantedApplicationRecord.create_tenant("bar")
+    end
+
+    # Only these two formats put loaded association targets in their payloads, and so only these
+    # two restore a record by assigning to an association.
+    %w[ Marshal MessagePack ].each do |format|
+      describe format do
+        let(:serializer) { SERIALIZERS[format] }
+
+        let(:dump_in_tenant_context) do
+          TenantedApplicationRecord.with_tenant("foo") do
+            user = User.first
+            user.posts.load
+            serializer[:dump].call(user)
+          end
+        end
+
+        let(:dump_outside_tenant_context) do
+          user = TenantedApplicationRecord.with_tenant("foo") { User.first.tap { |u| u.posts.load } }
+          TenantedApplicationRecord.without_tenant { serializer[:dump].call(user) }
+        end
+
+        describe "dumping in a tenanted context" do
+          test "loading in the same tenant context round-trips" do
+            payload = dump_in_tenant_context
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              loaded = serializer[:load].call(payload)
+
+              assert_equal("foo", loaded.tenant)
+              assert_same_elements([ "Post 1 foo", "Post 2 foo" ], loaded.posts.map(&:title))
+              assert_equal([ "foo" ], loaded.posts.map(&:tenant).uniq)
+            end
+          end
+
+          test "loading outside of a tenanted context round-trips" do
+            payload = dump_in_tenant_context
+
+            loaded = TenantedApplicationRecord.without_tenant { serializer[:load].call(payload) }
+
+            assert_equal("foo", loaded.tenant)
+            assert_predicate(loaded.association(:posts), :loaded?)
+            assert_same_elements([ "Post 1 foo", "Post 2 foo" ],
+                                 loaded.association(:posts).target.map(&:title))
+          end
+
+          test "loading in another tenant context round-trips" do
+            payload = dump_in_tenant_context
+
+            loaded = TenantedApplicationRecord.with_tenant("bar") { serializer[:load].call(payload) }
+
+            assert_equal("foo", loaded.tenant)
+            assert_predicate(loaded.association(:posts), :loaded?)
+            assert_same_elements([ "Post 1 foo", "Post 2 foo" ],
+                                 loaded.association(:posts).target.map(&:title))
+          end
+        end
+
+        describe "dumping outside of a tenanted context" do
+          test "loading in the same tenant context round-trips" do
+            payload = dump_outside_tenant_context
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              loaded = serializer[:load].call(payload)
+
+              assert_equal("foo", loaded.tenant)
+              assert_same_elements([ "Post 1 foo", "Post 2 foo" ], loaded.posts.map(&:title))
+              assert_equal([ "foo" ], loaded.posts.map(&:tenant).uniq)
+            end
+          end
+
+          test "loading outside of a tenanted context round-trips" do
+            payload = dump_outside_tenant_context
+
+            loaded = TenantedApplicationRecord.without_tenant { serializer[:load].call(payload) }
+
+            assert_equal("foo", loaded.tenant)
+            assert_predicate(loaded.association(:posts), :loaded?)
+            assert_same_elements([ "Post 1 foo", "Post 2 foo" ],
+                                 loaded.association(:posts).target.map(&:title))
+          end
+
+          test "loading in another tenant context round-trips" do
+            payload = dump_outside_tenant_context
+
+            loaded = TenantedApplicationRecord.with_tenant("bar") { serializer[:load].call(payload) }
+
+            assert_equal("foo", loaded.tenant)
+            assert_predicate(loaded.association(:posts), :loaded?)
+            assert_same_elements([ "Post 1 foo", "Post 2 foo" ],
+                                 loaded.association(:posts).target.map(&:title))
+          end
+        end
+      end
+    end
+  end
+end
+
 describe "Serialization options on a tenanted record" do
   with_scenario(:primary_db, :primary_record) do
     setup do

@@ -493,6 +493,24 @@ describe ActiveRecord::Tenanted::Tenant do
             end
           end
         end
+
+        test "querying a collection proxy carried into another tenant context" do
+          proxy = TenantedApplicationRecord.with_tenant("foo") { User.first.posts }
+
+          TenantedApplicationRecord.with_tenant("bar") do
+            assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+              proxy.count
+            end
+          end
+        end
+
+        test "querying a collection proxy carried outside of a tenant context" do
+          proxy = TenantedApplicationRecord.with_tenant("foo") { User.first.posts }
+
+          assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+            proxy.count
+          end
+        end
       end
 
       describe "to an untenanted model" do
@@ -537,7 +555,50 @@ describe ActiveRecord::Tenanted::Tenant do
         end
       end
 
-      describe "polymorphic" do
+      describe "polymorphic to a tenanted model" do
+        setup do
+          with_migration "20250830152220_create_posts.rb"
+          with_migration "20250830175957_add_announceable_to_users.rb"
+          User.belongs_to :announceable, polymorphic: true, optional: true
+
+          TenantedApplicationRecord.create_tenant("foo") do
+            # this association doesn't make a lot of sense, but it's just for testing
+            user = User.create!(email: "user1@foo.example.org")
+            user.update!(announceable: Post.create!(title: "Post 1 foo", user_id: user.id))
+          end
+
+          TenantedApplicationRecord.create_tenant("bar")
+        end
+
+        test "in a tenanted context" do
+          TenantedApplicationRecord.with_tenant("foo") do
+            user = User.first
+            post = user.announceable
+
+            assert_equal("Post 1 foo", post.title)
+          end
+        end
+
+        test "outside of a tenanted context" do
+          user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+          assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+            user.announceable
+          end
+        end
+
+        test "in another tenant context" do
+          user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+          TenantedApplicationRecord.with_tenant("bar") do
+            assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+              user.announceable
+            end
+          end
+        end
+      end
+
+      describe "polymorphic to an untenanted model" do
         setup do
           with_migration "20250830175957_add_announceable_to_users.rb"
           User.belongs_to :announceable, polymorphic: true
@@ -563,19 +624,19 @@ describe ActiveRecord::Tenanted::Tenant do
         test "outside of a tenanted context" do
           user = TenantedApplicationRecord.with_tenant("foo") { User.first }
 
-          assert_raises(ActiveRecord::Tenanted::NoTenantError) do
-            user.announceable
-          end
+          announcement = user.announceable
+
+          assert_equal("Announcement 1", announcement.message)
         end
 
         test "in another tenant context" do
           user = TenantedApplicationRecord.with_tenant("foo") { User.first }
 
-          TenantedApplicationRecord.with_tenant("bar") do
-            assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
-              user.announceable
-            end
+          announcement = TenantedApplicationRecord.with_tenant("bar") do
+            user.announceable
           end
+
+          assert_equal("Announcement 1", announcement.message)
         end
       end
     end

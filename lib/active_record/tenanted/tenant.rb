@@ -30,11 +30,19 @@ module ActiveRecord
         super(options.merge(tenant: tenant))
       end
 
-      def association(name)
-        super.tap do |assoc|
-          if assoc.reflection.polymorphic? || assoc.reflection.klass.tenanted?
-            ensure_tenant_context_safety
-          end
+      # Raises unless the record's tenant is the current tenant. Called before a record writes to
+      # the database, and by ActiveRecord::Tenanted::Associations before an association reads from
+      # it.
+      def ensure_tenant_context_safety
+        self_tenant = self.tenant
+        current_tenant = self.class.current_tenant
+
+        if current_tenant.nil?
+          raise NoTenantError, "Cannot connect to a tenanted database while untenanted (#{self.class})"
+        elsif self_tenant != current_tenant
+          raise WrongTenantError,
+                "#{self.class} model belongs to tenant #{self_tenant.inspect}, " \
+                "but current tenant is #{current_tenant.inspect}"
         end
       end
 
@@ -88,19 +96,6 @@ module ActiveRecord
         def init_internals
           @tenant = self.class.current_tenant
           super
-        end
-
-        def ensure_tenant_context_safety
-          self_tenant = self.tenant
-          current_tenant = self.class.current_tenant
-
-          if current_tenant.nil?
-            raise NoTenantError, "Cannot connect to a tenanted database while untenanted (#{self.class})"
-          elsif self_tenant != current_tenant
-            raise WrongTenantError,
-                  "#{self.class} model belongs to tenant #{self_tenant.inspect}, " \
-                  "but current tenant is #{current_tenant.inspect}"
-          end
         end
 
         # Presenting the tenant as one more serializable attribute lets ActiveModel apply the

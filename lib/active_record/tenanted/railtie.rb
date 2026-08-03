@@ -75,6 +75,7 @@ module ActiveRecord
         ActiveSupport.on_load(:active_record) do
           prepend ActiveRecord::Tenanted::Base
           ActiveRecord::Relation.prepend ActiveRecord::Tenanted::Relation
+          ActiveRecord::Associations::Association.prepend ActiveRecord::Tenanted::Associations
         end
       end
 
