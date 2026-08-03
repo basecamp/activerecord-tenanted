@@ -93,6 +93,13 @@ module ActiveRecord
         config.active_record.check_schema_cache_dump_version = false
       end
 
+      initializer "active_record_tenanted.message_pack" do
+        ActiveSupport.on_load(:message_pack) do
+          require "active_record/message_pack"
+          ActiveRecord::MessagePack::Decoder.prepend ActiveRecord::Tenanted::MessagePack::Decoder
+        end
+      end
+
       initializer "active_record_tenanted.monkey_patches" do
         ActiveSupport.on_load(:active_record) do
           ActiveRecord::Tenanted::Patches::Attributes.apply_patch

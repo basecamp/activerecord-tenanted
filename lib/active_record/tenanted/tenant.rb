@@ -38,6 +38,46 @@ module ActiveRecord
         end
       end
 
+      # The tenant is an ordinary attribute in serialized snapshots of the record, the same way Job
+      # and GlobalId serialize the tenant. Rails's only callers of this method are the serializers
+      # (Marshal 7.1 format and MessagePack); it does not feed the persistence write path.
+      def attributes_for_database
+        super.merge!("tenant" => tenant)
+      end
+
+      def encode_with(coder)
+        super
+        coder["tenant"] = tenant
+      end
+
+      def init_with(coder, &block)
+        super
+
+        tenant_name = coder["tenant"]
+        @tenant = tenant_name if tenant_name
+
+        self
+      end
+
+      def from_json(json, include_root = include_root_in_json)
+        hash = ActiveSupport::JSON.decode(json)
+        hash = hash.values.first if include_root
+
+        tenant_name = hash.delete("tenant")
+        @tenant = tenant_name if tenant_name
+
+        self.attributes = hash
+        self
+      end
+
+      def marshal_load(state)
+        tenant_name = state[0].delete("tenant")
+
+        super
+
+        @tenant = tenant_name if tenant_name
+      end
+
       alias to_gid to_global_id
       alias to_sgid to_signed_global_id
 
@@ -61,6 +101,12 @@ module ActiveRecord
                   "#{self.class} model belongs to tenant #{self_tenant.inspect}, " \
                   "but current tenant is #{current_tenant.inspect}"
           end
+        end
+
+        # Presenting the tenant as one more serializable attribute lets ActiveModel apply the
+        # `only:` and `except:` options to it, and read it back through the `tenant` reader.
+        def attribute_names_for_serialization
+          super + [ "tenant" ]
         end
     end
 

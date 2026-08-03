@@ -392,6 +392,9 @@ Security/JSONLoad:
 
 Security/MarshalLoad:
   Enabled: true
+  Exclude:
+    # Round-tripping records through Marshal is what this file tests.
+    - 'test/unit/serialization_test.rb'
 
 Security/Open:
   Enabled: true
