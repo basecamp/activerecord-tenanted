@@ -30,9 +30,12 @@ module ActiveRecord
         super(options.merge(tenant: tenant))
       end
 
-      # Raises unless the record's tenant is the current tenant. Called before a record writes to
-      # the database, and by ActiveRecord::Tenanted::Associations before an association reads from
-      # it.
+      def reload(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
       def ensure_tenant_context_safety
         self_tenant = self.tenant
         current_tenant = self.class.current_tenant

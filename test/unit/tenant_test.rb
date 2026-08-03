@@ -1311,6 +1311,46 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "#reload" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_equal("user1@foo.example.org", user.reload.email)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.reload
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.reload
+          end
+        end
+      end
+    end
+  end
+
   describe "#inspect" do
     for_each_scenario do
       describe "created in untenanted context" do

@@ -32,6 +32,9 @@ module ActiveRecord
         db_config.max_connections
       end
 
+      def clear_query_cache
+      end
+
       def lease_connection(...)
         raise Tenanted::NoTenantError, "Cannot connect to a tenanted database while untenanted (#{@model})."
       end
