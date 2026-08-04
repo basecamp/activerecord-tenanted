@@ -9,6 +9,7 @@ module ActiveRecord
       prepended do
         attr_reader :tenant
 
+        before_save :ensure_belongs_to_tenant_safety, prepend: true
         before_save :ensure_tenant_context_safety, prepend: true
         before_destroy :ensure_tenant_context_safety, prepend: true
       end
@@ -50,6 +51,23 @@ module ActiveRecord
         ensure_tenant_context_safety
 
         super
+      end
+
+      # A belongs_to writes its foreign key onto this record, so nothing else notices when the
+      # target came from another tenant's database.
+      def ensure_belongs_to_tenant_safety
+        self.class.reflect_on_all_associations(:belongs_to).each do |reflection|
+          # Avoid creating the Association object for a belongs_to that was never touched
+          next unless association_cached?(reflection.name)
+
+          target = association(reflection.name).target
+
+          if target && target.class.tenanted? && target.tenant != tenant
+            raise WrongTenantError,
+                  "#{self.class} model belongs to tenant #{tenant.inspect}, but its " \
+                  "#{reflection.name} association belongs to tenant #{target.tenant.inspect}"
+          end
+        end
       end
 
       def ensure_tenant_context_safety

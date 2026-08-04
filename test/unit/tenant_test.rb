@@ -643,6 +643,140 @@ describe ActiveRecord::Tenanted::Tenant do
   end
 
 
+  describe "association setters" do
+    for_each_scenario do
+      describe "to a tenanted model" do
+        setup do
+          with_migration "20250830152220_create_posts.rb"
+          Post.belongs_to :user
+
+          TenantedApplicationRecord.create_tenant("foo") do
+            User.create!(email: "user1@foo.example.org")
+          end
+
+          TenantedApplicationRecord.create_tenant("bar") do
+            user = User.create!(email: "user1@bar.example.org")
+            Post.create!(title: "Post 1 bar", user: user)
+          end
+        end
+
+        let(:foo_user) { TenantedApplicationRecord.with_tenant("foo") { User.first } }
+        let(:bar_post) { TenantedApplicationRecord.with_tenant("bar") { Post.first } }
+
+        describe "belongs_to" do
+          test "assigning a record from another tenant does not raise" do
+            user = foo_user
+
+            TenantedApplicationRecord.with_tenant("bar") do
+              post = Post.first
+
+              assert_nothing_raised { post.user = user }
+            end
+          end
+
+          test "saving after assigning a record from another tenant raises" do
+            user = foo_user
+
+            TenantedApplicationRecord.with_tenant("bar") do
+              post = Post.first
+              post.user = user
+
+              assert_raises(ActiveRecord::Tenanted::WrongTenantError) { post.save }
+            end
+          end
+
+          test "saving with a cached association from the same tenant does not raise" do
+            TenantedApplicationRecord.with_tenant("bar") do
+              post = Post.first
+              post.user = User.first
+
+              assert_nothing_raised { post.update!(title: "Post 1 bar, edited") }
+            end
+          end
+
+          test "saving with an association that was never loaded does not raise" do
+            TenantedApplicationRecord.with_tenant("bar") do
+              post = Post.first
+
+              assert_nothing_raised { post.update!(title: "Post 1 bar, edited") }
+            end
+          end
+        end
+
+        describe "has_many" do
+          setup { User.has_many :posts }
+
+          test "assigning a record from another tenant does not raise" do
+            post = bar_post
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              user = User.new(email: "user2@foo.example.org")
+
+              assert_nothing_raised { user.posts = [ post ] }
+            end
+          end
+
+          test "saving after assigning a record from another tenant raises" do
+            post = bar_post
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              user = User.new(email: "user2@foo.example.org")
+              user.posts = [ post ]
+
+              assert_raises(ActiveRecord::Tenanted::WrongTenantError) { user.save }
+            end
+          end
+        end
+
+        describe "has_one" do
+          setup { User.has_one :post }
+
+          test "assigning a record from another tenant does not raise" do
+            post = bar_post
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              user = User.new(email: "user2@foo.example.org")
+
+              assert_nothing_raised { user.post = post }
+            end
+          end
+
+          test "saving after assigning a record from another tenant raises" do
+            post = bar_post
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              user = User.new(email: "user2@foo.example.org")
+              user.post = post
+
+              assert_raises(ActiveRecord::Tenanted::WrongTenantError) { user.save }
+            end
+          end
+        end
+      end
+
+      describe "to an untenanted model" do
+        setup do
+          with_migration "20250830170325_add_announcement_to_users.rb"
+          User.belongs_to :announcement
+
+          TenantedApplicationRecord.create_tenant("foo") do
+            User.create!(email: "user1@foo.example.org",
+                         announcement: Announcement.create!(message: "Announcement 1"))
+          end
+        end
+
+        test "saving after assigning an untenanted record does not raise" do
+          TenantedApplicationRecord.with_tenant("foo") do
+            user = User.first
+            user.announcement = Announcement.create!(message: "Announcement 2")
+
+            assert_nothing_raised { user.save! }
+          end
+        end
+      end
+    end
+  end
+
   describe ".without_tenant" do
     for_each_scenario do
       setup do
