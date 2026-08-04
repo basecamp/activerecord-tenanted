@@ -1612,6 +1612,213 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "#update_column" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.update_column(:email, "edited@foo.example.org")
+
+          assert_equal("edited@foo.example.org", User.first.email)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.update_column(:email, "edited@foo.example.org")
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.update_column(:email, "edited@foo.example.org")
+          end
+        end
+      end
+    end
+  end
+
+  describe "#update_columns" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.update_columns(email: "edited@foo.example.org")
+
+          assert_equal("edited@foo.example.org", User.first.email)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.update_columns(email: "edited@foo.example.org")
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.update_columns(email: "edited@foo.example.org")
+          end
+        end
+      end
+    end
+  end
+
+  describe "#touch" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+          was = user.updated_at
+
+          user.touch
+
+          assert_operator(user.updated_at, :>, was)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.touch
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.touch
+          end
+        end
+      end
+    end
+  end
+
+  describe "#increment!" do
+    for_each_scenario do
+      setup do
+        with_migration "20250213005959_add_age_to_users.rb"
+
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org", age: 10)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org", age: 20)
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.increment!(:age)
+
+          assert_equal(11, User.first.age)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.increment!(:age)
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.increment!(:age)
+          end
+        end
+      end
+    end
+  end
+
+  describe "#decrement!" do
+    for_each_scenario do
+      setup do
+        with_migration "20250213005959_add_age_to_users.rb"
+
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org", age: 10)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org", age: 20)
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.decrement!(:age)
+
+          assert_equal(9, User.first.age)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.decrement!(:age)
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.decrement!(:age)
+          end
+        end
+      end
+    end
+  end
+
   describe "#inspect" do
     for_each_scenario do
       describe "created in untenanted context" do

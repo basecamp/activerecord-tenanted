@@ -53,6 +53,26 @@ module ActiveRecord
         super
       end
 
+      # #update_column delegates here
+      def update_columns(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
+      def touch(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
+      # #decrement! delegates here
+      def increment!(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
       # A belongs_to writes its foreign key onto this record, so nothing else notices when the
       # target came from another tenant's database.
       def ensure_belongs_to_tenant_safety
