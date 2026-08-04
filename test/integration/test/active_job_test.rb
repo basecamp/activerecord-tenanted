@@ -35,8 +35,7 @@ class NoteCheerioJobTest < ActiveJob::TestCase
 
     e = assert_raises(ActiveJob::DeserializationError) { perform_enqueued_jobs }
 
-    # this will be a RecordNotFound if the GlobalID locator is not installed correctly
-    assert_kind_of(ActiveRecord::Tenanted::WrongTenantError, e.cause)
+    assert_tenant_error(ActiveRecord::Tenanted::WrongTenantError, e)
   end
 
   test "global id locator catches untenanted context" do
@@ -51,8 +50,16 @@ class NoteCheerioJobTest < ActiveJob::TestCase
 
     e = assert_raises(ActiveJob::DeserializationError) { perform_enqueued_jobs }
 
-    # this will be a RecordNotFound if the GlobalID locator is not installed correctly
-    # this will be a WrongTenantError if the active job test helper isn't installed correctly
-    assert_kind_of(ActiveRecord::Tenanted::NoTenantError, e.cause)
+    assert_tenant_error(ActiveRecord::Tenanted::NoTenantError, e)
   end
+
+  private
+    # GlobalID::Locator.fetch may re-raise our error wrapped in RecordUnavailable.
+    def assert_tenant_error(error_class, error)
+      chain = [ error ]
+      chain << chain.last.cause while chain.last.cause
+
+      assert(chain.any? { |e| e.is_a?(error_class) },
+             "Expected #{error_class} in #{chain.map(&:class).inspect}")
+    end
 end
