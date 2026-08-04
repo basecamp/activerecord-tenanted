@@ -124,8 +124,8 @@ module ActiveRecord
       def init_with(coder, &block)
         super
 
-        tenant_name = coder["tenant"]
-        @tenant = tenant_name if tenant_name
+        # Psych::Coder does not implement #key?, but exposes the underlying hash as #map
+        @tenant = coder.map["tenant"] if coder.map.key?("tenant")
 
         self
       end
@@ -134,19 +134,19 @@ module ActiveRecord
         hash = ActiveSupport::JSON.decode(json)
         hash = hash.values.first if include_root
 
-        tenant_name = hash.delete("tenant")
-        @tenant = tenant_name if tenant_name
+        @tenant = hash.delete("tenant") if hash.key?("tenant")
 
         self.attributes = hash
         self
       end
 
       def marshal_load(state)
+        has_tenant = state[0].key?("tenant")
         tenant_name = state[0].delete("tenant")
 
         super
 
-        @tenant = tenant_name if tenant_name
+        @tenant = tenant_name if has_tenant
       end
 
       alias to_gid to_global_id

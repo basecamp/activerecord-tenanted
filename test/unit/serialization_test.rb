@@ -296,3 +296,27 @@ describe "Loading a tenanted record when a callback materializes the attribute s
     end
   end
 end
+
+describe "Serializing a tenanted record with no tenant" do
+  with_scenario(:primary_db, :primary_record) do
+    setup do
+      with_schema_cache_dump_file
+      TenantedApplicationRecord.create_tenant("foo")
+    end
+
+    SERIALIZERS.each do |format, serializer|
+      describe format do
+        test "the loading context does not become the record's tenant" do
+          user = User.new(email: "user1@example.org")
+          assert_nil(user.tenant)
+
+          payload = serializer[:dump].call(user)
+
+          loaded = TenantedApplicationRecord.with_tenant("foo") { serializer[:load].call(payload) }
+
+          assert_nil(loaded.tenant)
+        end
+      end
+    end
+  end
+end

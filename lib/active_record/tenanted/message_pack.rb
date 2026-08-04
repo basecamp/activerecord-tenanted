@@ -10,10 +10,11 @@ module ActiveRecord
           class_name, attributes_hash, * = entry
 
           if ActiveSupport::MessagePack::Extensions.load_class(class_name).tenanted?
+            has_tenant = attributes_hash.key?("tenant")
             tenant_name = attributes_hash.delete("tenant")
 
             super.tap do |record|
-              record.instance_variable_set(:@tenant, tenant_name) if tenant_name
+              record.instance_variable_set(:@tenant, tenant_name) if has_tenant
             end
           else
             super
