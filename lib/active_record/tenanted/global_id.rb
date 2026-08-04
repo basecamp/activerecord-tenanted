@@ -9,10 +9,15 @@ module ActiveRecord
         params && params[:tenant]
       end
 
-      class Locator
+      class Locator < ::GlobalID::Locator::UnscopedLocator
         def locate(gid, options = {})
           ensure_tenant_context_safety(gid)
-          gid.model_class.find(gid.model_id)
+          super
+        end
+
+        def locate_many(gids, options = {})
+          gids.each { |gid| ensure_tenant_context_safety(gid) }
+          super
         end
 
         private

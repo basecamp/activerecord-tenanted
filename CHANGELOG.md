@@ -1,5 +1,13 @@
 # `activerecord-tenanted` Changelog
 
+## next / unreleased
+
+### Fixed
+
+- `Tenanted::GlobalId::Locator` now inherits from `GlobalID::Locator::UnscopedLocator`, which is the locator Rails uses by default. Two behavior changes follow: GlobalID lookups no longer apply a model's `default_scope`, matching Rails; and `#locate_many` is now implemented, which Active Job on Rails edge requires to deserialize GlobalID arguments. `#locate_many` enforces the same tenant safety checks as `#locate`. @flavorjones
+- `Tenanted::GlobalId::Locator` no longer emits a deprecation warning from GlobalID 1.4.0 about the missing `model_class` method. @flavorjones
+
+
 ## v0.7.0 / 2026-06-08
 
 ### Security
