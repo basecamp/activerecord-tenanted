@@ -2,10 +2,30 @@
 
 ## next / unreleased
 
+### Breaking change: serialized payloads carry the tenant
+
+A tenanted record now writes its tenant into the payload produced by `Marshal`, JSON, YAML, and MessagePack, so that it keeps its tenant identity when it is loaded in another tenant context or in none. This fixes a hang in parallel test suites, where a worker died reporting an exception that carried a record with a loaded association. See [#243](https://github.com/basecamp/activerecord-tenanted/issues/243). @flavorjones
+
+The payload format changes, and the change is not backward compatible. An earlier version of this gem reading a payload written by this version raises `ActiveModel::UnknownAttributeError` for JSON, and gains a phantom `tenant` attribute for `Marshal` and MessagePack. Payloads written by an earlier version are still read correctly by this version, and keep the loading context as they did before.
+
+Discard persisted payloads before upgrading, including cache entries, enqueued jobs, and serialized columns. Expect the same incompatibility during a rolling deploy, while old and new code run at the same time.
+
+### Breaking change: record equality
+
+`==`, `eql?`, and `#hash` now take the tenant into account. Two records of the same class with the same id in different tenant databases were previously equal, and collided as `Hash` keys and in a `Set`. They are now distinct. Code that compares records across tenants, or that relies on `has_many` assignment treating them as interchangeable, will behave differently. @flavorjones
+
 ### Fixed
 
 - `Tenanted::GlobalId::Locator` now inherits from `GlobalID::Locator::UnscopedLocator`, which is the locator Rails uses by default. Two behavior changes follow: GlobalID lookups no longer apply a model's `default_scope`, matching Rails; and `#locate_many` is now implemented, which Active Job on Rails edge requires to deserialize GlobalID arguments. `#locate_many` enforces the same tenant safety checks as `#locate`. @flavorjones
 - `Tenanted::GlobalId::Locator` no longer emits a deprecation warning from GlobalID 1.4.0 about the missing `model_class` method. @flavorjones
+- The tenant context check now runs when an association reads or writes the database, rather than when the `Association` object is created. A polymorphic association is checked against the class it points at, instead of being presumed tenanted. @flavorjones
+- `#reload`, `#destroy`, `#delete`, `#update_column`, `#update_columns`, `#touch`, `#increment!`, `#decrement!`, and `#valid?` check the tenant context before they touch the database. They previously operated on the current tenant's database whatever the record's tenant. @flavorjones
+- Assigning a `belongs_to` target that belongs to another tenant now raises `WrongTenantError` when the record is saved, rather than writing a foreign key that points into another tenant's database. @flavorjones
+- `UntenantedConnectionPool` implements `#clear_query_cache` as a no-op, having no query cache to clear. `ActiveRecord::Persistence#reload` calls it before it asks for a connection, so an untenanted `#reload` previously raised `NoMethodError` instead of `NoTenantError`. @flavorjones
+
+### Developer infrastructure
+
+- Added `msgpack` as a development dependency, so that the serialization tests can exercise a MessagePack round trip. @flavorjones
 
 
 ## v0.7.0 / 2026-06-08

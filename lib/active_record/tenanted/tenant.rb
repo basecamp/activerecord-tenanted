@@ -9,11 +9,22 @@ module ActiveRecord
       prepended do
         attr_reader :tenant
 
-        before_save :ensure_tenant_context_safety
+        before_save :ensure_belongs_to_tenant_safety, prepend: true
+        before_save :ensure_tenant_context_safety, prepend: true
+        before_destroy :ensure_tenant_context_safety, prepend: true
       end
 
       def cache_key
         tenant ? "#{tenant}/#{super}" : super
+      end
+
+      def ==(other)
+        super && tenant == other.tenant
+      end
+      alias eql? ==
+
+      def hash
+        [ super, tenant ].hash
       end
 
       def inspect
@@ -30,12 +41,112 @@ module ActiveRecord
         super(options.merge(tenant: tenant))
       end
 
-      def association(name)
-        super.tap do |assoc|
-          if assoc.reflection.polymorphic? || assoc.reflection.klass.tenanted?
-            ensure_tenant_context_safety
+      def reload(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
+      def valid?(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
+      def delete
+        ensure_tenant_context_safety
+
+        super
+      end
+
+      # #update_column delegates here
+      def update_columns(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
+      def touch(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
+      # #decrement! delegates here
+      def increment!(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
+      # A belongs_to writes its foreign key onto this record, so nothing else notices when the
+      # target came from another tenant's database.
+      def ensure_belongs_to_tenant_safety
+        self.class.reflect_on_all_associations(:belongs_to).each do |reflection|
+          # Avoid creating the Association object for a belongs_to that was never touched
+          next unless association_cached?(reflection.name)
+
+          target = association(reflection.name).target
+
+          if target && target.class.tenanted? && target.tenant != tenant
+            raise WrongTenantError,
+                  "#{self.class} model belongs to tenant #{tenant.inspect}, but its " \
+                  "#{reflection.name} association belongs to tenant #{target.tenant.inspect}"
           end
         end
+      end
+
+      def ensure_tenant_context_safety
+        self_tenant = self.tenant
+        current_tenant = self.class.current_tenant
+
+        if current_tenant.nil?
+          raise NoTenantError, "Cannot connect to a tenanted database while untenanted (#{self.class})"
+        elsif self_tenant != current_tenant
+          raise WrongTenantError,
+                "#{self.class} model belongs to tenant #{self_tenant.inspect}, " \
+                "but current tenant is #{current_tenant.inspect}"
+        end
+      end
+
+      # The tenant is an ordinary attribute in serialized snapshots of the record, the same way Job
+      # and GlobalId serialize the tenant. Rails's only callers of this method are the serializers
+      # (Marshal 7.1 format and MessagePack); it does not feed the persistence write path.
+      def attributes_for_database
+        super.merge!("tenant" => tenant)
+      end
+
+      def encode_with(coder)
+        super
+        coder["tenant"] = tenant
+      end
+
+      def init_with(coder, &block)
+        super
+
+        # Psych::Coder does not implement #key?, but exposes the underlying hash as #map
+        @tenant = coder.map["tenant"] if coder.map.key?("tenant")
+
+        self
+      end
+
+      def from_json(json, include_root = include_root_in_json)
+        hash = ActiveSupport::JSON.decode(json)
+        hash = hash.values.first if include_root
+
+        @tenant = hash.delete("tenant") if hash.key?("tenant")
+
+        self.attributes = hash
+        self
+      end
+
+      def marshal_load(state)
+        has_tenant = state[0].key?("tenant")
+        tenant_name = state[0].delete("tenant")
+
+        super
+
+        @tenant = tenant_name if has_tenant
       end
 
       alias to_gid to_global_id
@@ -50,17 +161,10 @@ module ActiveRecord
           super
         end
 
-        def ensure_tenant_context_safety
-          self_tenant = self.tenant
-          current_tenant = self.class.current_tenant
-
-          if current_tenant.nil?
-            raise NoTenantError, "Cannot connect to a tenanted database while untenanted (#{self.class})"
-          elsif self_tenant != current_tenant
-            raise WrongTenantError,
-                  "#{self.class} model belongs to tenant #{self_tenant.inspect}, " \
-                  "but current tenant is #{current_tenant.inspect}"
-          end
+        # Presenting the tenant as one more serializable attribute lets ActiveModel apply the
+        # `only:` and `except:` options to it, and read it back through the `tenant` reader.
+        def attribute_names_for_serialization
+          super + [ "tenant" ]
         end
     end
 

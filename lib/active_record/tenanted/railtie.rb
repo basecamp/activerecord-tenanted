@@ -75,6 +75,7 @@ module ActiveRecord
         ActiveSupport.on_load(:active_record) do
           prepend ActiveRecord::Tenanted::Base
           ActiveRecord::Relation.prepend ActiveRecord::Tenanted::Relation
+          ActiveRecord::Associations::Association.prepend ActiveRecord::Tenanted::Associations
         end
       end
 
@@ -91,6 +92,13 @@ module ActiveRecord
         # The schema cache version check needs to query the database, which isn't always possible
         # for tenanted models.
         config.active_record.check_schema_cache_dump_version = false
+      end
+
+      initializer "active_record_tenanted.message_pack" do
+        ActiveSupport.on_load(:message_pack) do
+          require "active_record/message_pack"
+          ActiveRecord::MessagePack::Decoder.prepend ActiveRecord::Tenanted::MessagePack::Decoder
+        end
       end
 
       initializer "active_record_tenanted.monkey_patches" do
