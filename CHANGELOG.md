@@ -1,6 +1,6 @@
 # `activerecord-tenanted` Changelog
 
-## next / unreleased
+## v0.8.0 / 2026-08-04
 
 ### Breaking change: serialized payloads carry the tenant
 
