@@ -674,14 +674,14 @@ describe ActiveRecord::Tenanted::Tenant do
             end
           end
 
-          test "saving after assigning a record from another tenant raises" do
+          test "saving with validate: false after assigning a record from another tenant raises" do
             user = foo_user
 
             TenantedApplicationRecord.with_tenant("bar") do
               post = Post.first
               post.user = user
 
-              assert_raises(ActiveRecord::Tenanted::WrongTenantError) { post.save }
+              assert_raises(ActiveRecord::Tenanted::WrongTenantError) { post.save(validate: false) }
             end
           end
 
@@ -1813,6 +1813,91 @@ describe ActiveRecord::Tenanted::Tenant do
         TenantedApplicationRecord.with_tenant("bar") do
           assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
             user.decrement!(:age)
+          end
+        end
+      end
+    end
+  end
+
+  describe "#save with validate: false" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+          user.email = "edited@foo.example.org"
+
+          assert(user.save(validate: false))
+          assert_equal("edited@foo.example.org", User.first.email)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.save(validate: false)
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.save(validate: false)
+          end
+        end
+      end
+    end
+  end
+
+  describe "#valid?" do
+    for_each_scenario do
+      setup do
+        User.validates_uniqueness_of :email
+
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+          user.email = "edited@foo.example.org"
+
+          assert_predicate(user, :valid?)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.valid?
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.valid?
           end
         end
       end

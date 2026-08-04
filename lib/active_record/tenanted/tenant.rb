@@ -47,6 +47,12 @@ module ActiveRecord
         super
       end
 
+      def valid?(...)
+        ensure_tenant_context_safety
+
+        super
+      end
+
       def delete
         ensure_tenant_context_safety
 
