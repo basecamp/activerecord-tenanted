@@ -104,7 +104,7 @@ GIT
 PATH
   remote: .
   specs:
-    activerecord-tenanted (0.7.0)
+    activerecord-tenanted (0.8.0)
       activerecord (>= 8.1.2.1)
       railties (>= 8.1.2.1)
       zeitwerk
@@ -416,7 +416,7 @@ CHECKSUMS
   activejob (8.2.0.alpha)
   activemodel (8.2.0.alpha)
   activerecord (8.2.0.alpha)
-  activerecord-tenanted (0.7.0)
+  activerecord-tenanted (0.8.0)
   activestorage (8.2.0.alpha)
   activesupport (8.2.0.alpha)
   addressable (2.9.0) sha256=7fdf6ac3660f7f4e867a0838be3f6cf722ace541dd97767fa42bc6cfa980c7af
