@@ -493,6 +493,24 @@ describe ActiveRecord::Tenanted::Tenant do
             end
           end
         end
+
+        test "querying a collection proxy carried into another tenant context" do
+          proxy = TenantedApplicationRecord.with_tenant("foo") { User.first.posts }
+
+          TenantedApplicationRecord.with_tenant("bar") do
+            assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+              proxy.count
+            end
+          end
+        end
+
+        test "querying a collection proxy carried outside of a tenant context" do
+          proxy = TenantedApplicationRecord.with_tenant("foo") { User.first.posts }
+
+          assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+            proxy.count
+          end
+        end
       end
 
       describe "to an untenanted model" do
@@ -537,7 +555,50 @@ describe ActiveRecord::Tenanted::Tenant do
         end
       end
 
-      describe "polymorphic" do
+      describe "polymorphic to a tenanted model" do
+        setup do
+          with_migration "20250830152220_create_posts.rb"
+          with_migration "20250830175957_add_announceable_to_users.rb"
+          User.belongs_to :announceable, polymorphic: true, optional: true
+
+          TenantedApplicationRecord.create_tenant("foo") do
+            # this association doesn't make a lot of sense, but it's just for testing
+            user = User.create!(email: "user1@foo.example.org")
+            user.update!(announceable: Post.create!(title: "Post 1 foo", user_id: user.id))
+          end
+
+          TenantedApplicationRecord.create_tenant("bar")
+        end
+
+        test "in a tenanted context" do
+          TenantedApplicationRecord.with_tenant("foo") do
+            user = User.first
+            post = user.announceable
+
+            assert_equal("Post 1 foo", post.title)
+          end
+        end
+
+        test "outside of a tenanted context" do
+          user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+          assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+            user.announceable
+          end
+        end
+
+        test "in another tenant context" do
+          user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+          TenantedApplicationRecord.with_tenant("bar") do
+            assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+              user.announceable
+            end
+          end
+        end
+      end
+
+      describe "polymorphic to an untenanted model" do
         setup do
           with_migration "20250830175957_add_announceable_to_users.rb"
           User.belongs_to :announceable, polymorphic: true
@@ -563,24 +624,158 @@ describe ActiveRecord::Tenanted::Tenant do
         test "outside of a tenanted context" do
           user = TenantedApplicationRecord.with_tenant("foo") { User.first }
 
-          assert_raises(ActiveRecord::Tenanted::NoTenantError) do
-            user.announceable
-          end
+          announcement = user.announceable
+
+          assert_equal("Announcement 1", announcement.message)
         end
 
         test "in another tenant context" do
           user = TenantedApplicationRecord.with_tenant("foo") { User.first }
 
-          TenantedApplicationRecord.with_tenant("bar") do
-            assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
-              user.announceable
-            end
+          announcement = TenantedApplicationRecord.with_tenant("bar") do
+            user.announceable
           end
+
+          assert_equal("Announcement 1", announcement.message)
         end
       end
     end
   end
 
+
+  describe "association setters" do
+    for_each_scenario do
+      describe "to a tenanted model" do
+        setup do
+          with_migration "20250830152220_create_posts.rb"
+          Post.belongs_to :user
+
+          TenantedApplicationRecord.create_tenant("foo") do
+            User.create!(email: "user1@foo.example.org")
+          end
+
+          TenantedApplicationRecord.create_tenant("bar") do
+            user = User.create!(email: "user1@bar.example.org")
+            Post.create!(title: "Post 1 bar", user: user)
+          end
+        end
+
+        let(:foo_user) { TenantedApplicationRecord.with_tenant("foo") { User.first } }
+        let(:bar_post) { TenantedApplicationRecord.with_tenant("bar") { Post.first } }
+
+        describe "belongs_to" do
+          test "assigning a record from another tenant does not raise" do
+            user = foo_user
+
+            TenantedApplicationRecord.with_tenant("bar") do
+              post = Post.first
+
+              assert_nothing_raised { post.user = user }
+            end
+          end
+
+          test "saving with validate: false after assigning a record from another tenant raises" do
+            user = foo_user
+
+            TenantedApplicationRecord.with_tenant("bar") do
+              post = Post.first
+              post.user = user
+
+              assert_raises(ActiveRecord::Tenanted::WrongTenantError) { post.save(validate: false) }
+            end
+          end
+
+          test "saving with a cached association from the same tenant does not raise" do
+            TenantedApplicationRecord.with_tenant("bar") do
+              post = Post.first
+              post.user = User.first
+
+              assert_nothing_raised { post.update!(title: "Post 1 bar, edited") }
+            end
+          end
+
+          test "saving with an association that was never loaded does not raise" do
+            TenantedApplicationRecord.with_tenant("bar") do
+              post = Post.first
+
+              assert_nothing_raised { post.update!(title: "Post 1 bar, edited") }
+            end
+          end
+        end
+
+        describe "has_many" do
+          setup { User.has_many :posts }
+
+          test "assigning a record from another tenant does not raise" do
+            post = bar_post
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              user = User.new(email: "user2@foo.example.org")
+
+              assert_nothing_raised { user.posts = [ post ] }
+            end
+          end
+
+          test "saving after assigning a record from another tenant raises" do
+            post = bar_post
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              user = User.new(email: "user2@foo.example.org")
+              user.posts = [ post ]
+
+              assert_raises(ActiveRecord::Tenanted::WrongTenantError) { user.save }
+            end
+          end
+        end
+
+        describe "has_one" do
+          setup { User.has_one :post }
+
+          test "assigning a record from another tenant does not raise" do
+            post = bar_post
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              user = User.new(email: "user2@foo.example.org")
+
+              assert_nothing_raised { user.post = post }
+            end
+          end
+
+          test "saving after assigning a record from another tenant raises" do
+            post = bar_post
+
+            TenantedApplicationRecord.with_tenant("foo") do
+              user = User.new(email: "user2@foo.example.org")
+              user.post = post
+
+              assert_raises(ActiveRecord::Tenanted::WrongTenantError) { user.save }
+            end
+          end
+        end
+      end
+
+      describe "to an untenanted model" do
+        setup do
+          with_migration "20250830170325_add_announcement_to_users.rb"
+          User.belongs_to :announcement
+
+          TenantedApplicationRecord.create_tenant("foo") do
+            User.create!(email: "user1@foo.example.org",
+                         announcement: Announcement.create!(message: "Announcement 1"))
+          end
+        end
+
+        test "saving after assigning an untenanted record does not raise" do
+          TenantedApplicationRecord.with_tenant("foo") do
+            user = User.first
+            user.announcement = Announcement.create!(message: "Announcement 2")
+
+            assert_nothing_raised { user.save! }
+          end
+        end
+      end
+    end
+  end
 
   describe ".without_tenant" do
     for_each_scenario do
@@ -1215,6 +1410,53 @@ describe ActiveRecord::Tenanted::Tenant do
     end
   end
 
+  describe "#==" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      let(:foo_user) { TenantedApplicationRecord.with_tenant("foo") { User.first } }
+      let(:bar_user) { TenantedApplicationRecord.with_tenant("bar") { User.first } }
+
+      test "records from the same tenant with the same id are equal" do
+        other = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_equal(foo_user, other)
+      end
+
+      test "records from the same tenant with the same id have the same hash" do
+        other = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_equal(foo_user.hash, other.hash)
+      end
+
+      test "records from different tenants with the same id are not equal" do
+        assert_equal(foo_user.id, bar_user.id)
+
+        assert_not_equal(foo_user, bar_user)
+      end
+
+      test "records from different tenants with the same id are not eql?" do
+        assert_equal(foo_user.id, bar_user.id)
+
+        assert_not(foo_user.eql?(bar_user))
+      end
+
+      test "records from different tenants with the same id have different hashes" do
+        assert_equal(foo_user.id, bar_user.id)
+
+        assert_not_equal(foo_user.hash, bar_user.hash)
+      end
+    end
+  end
+
   describe "#cache_key" do
     for_each_scenario do
       describe "created in untenanted context" do
@@ -1244,6 +1486,418 @@ describe ActiveRecord::Tenanted::Tenant do
           TenantedApplicationRecord.create_tenant("foo-bar_123") do
             user = User.create!(email: "user1@example.org")
             assert_equal("foo-bar_123/users/1", user.cache_key)
+          end
+        end
+      end
+    end
+  end
+
+  describe "#reload" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+
+          assert_equal("user1@foo.example.org", user.reload.email)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.reload
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.reload
+          end
+        end
+      end
+    end
+  end
+
+  describe "#destroy" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.destroy
+
+          assert_equal(0, User.count)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.destroy
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.destroy
+          end
+        end
+      end
+    end
+  end
+
+  describe "#delete" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.delete
+
+          assert_equal(0, User.count)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.delete
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.delete
+          end
+        end
+      end
+    end
+  end
+
+  describe "#update_column" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.update_column(:email, "edited@foo.example.org")
+
+          assert_equal("edited@foo.example.org", User.first.email)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.update_column(:email, "edited@foo.example.org")
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.update_column(:email, "edited@foo.example.org")
+          end
+        end
+      end
+    end
+  end
+
+  describe "#update_columns" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.update_columns(email: "edited@foo.example.org")
+
+          assert_equal("edited@foo.example.org", User.first.email)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.update_columns(email: "edited@foo.example.org")
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.update_columns(email: "edited@foo.example.org")
+          end
+        end
+      end
+    end
+  end
+
+  describe "#touch" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+          was = user.updated_at
+
+          user.touch
+
+          assert_operator(user.updated_at, :>, was)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.touch
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.touch
+          end
+        end
+      end
+    end
+  end
+
+  describe "#increment!" do
+    for_each_scenario do
+      setup do
+        with_migration "20250213005959_add_age_to_users.rb"
+
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org", age: 10)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org", age: 20)
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.increment!(:age)
+
+          assert_equal(11, User.first.age)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.increment!(:age)
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.increment!(:age)
+          end
+        end
+      end
+    end
+  end
+
+  describe "#decrement!" do
+    for_each_scenario do
+      setup do
+        with_migration "20250213005959_add_age_to_users.rb"
+
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org", age: 10)
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org", age: 20)
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          User.first.decrement!(:age)
+
+          assert_equal(9, User.first.age)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.decrement!(:age)
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.decrement!(:age)
+          end
+        end
+      end
+    end
+  end
+
+  describe "#save with validate: false" do
+    for_each_scenario do
+      setup do
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+          user.email = "edited@foo.example.org"
+
+          assert(user.save(validate: false))
+          assert_equal("edited@foo.example.org", User.first.email)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.save(validate: false)
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.save(validate: false)
+          end
+        end
+      end
+    end
+  end
+
+  describe "#valid?" do
+    for_each_scenario do
+      setup do
+        User.validates_uniqueness_of :email
+
+        TenantedApplicationRecord.create_tenant("foo") do
+          User.create!(email: "user1@foo.example.org")
+        end
+
+        TenantedApplicationRecord.create_tenant("bar") do
+          User.create!(email: "user1@bar.example.org")
+        end
+      end
+
+      test "in the same tenant context" do
+        TenantedApplicationRecord.with_tenant("foo") do
+          user = User.first
+          user.email = "edited@foo.example.org"
+
+          assert_predicate(user, :valid?)
+        end
+      end
+
+      test "outside of a tenanted context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+          user.valid?
+        end
+      end
+
+      test "in another tenant context" do
+        user = TenantedApplicationRecord.with_tenant("foo") { User.first }
+
+        TenantedApplicationRecord.with_tenant("bar") do
+          assert_raises(ActiveRecord::Tenanted::WrongTenantError) do
+            user.valid?
           end
         end
       end

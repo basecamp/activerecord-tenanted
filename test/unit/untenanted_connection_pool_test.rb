@@ -24,5 +24,9 @@ describe ActiveRecord::Tenanted::UntenantedConnectionPool do
       def config.max_connections; 42; end
       assert_equal 42, subject.size
     end
+
+    test "clear_query_cache does nothing" do
+      assert_nil subject.clear_query_cache
+    end
   end
 end
