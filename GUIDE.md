@@ -28,6 +28,7 @@
   * [2.5 Configuring the Tenant Resolver](#25-configuring-the-tenant-resolver)
   * [2.6 Other Tenant Configuration](#26-other-tenant-configuration)
   * [2.7 Related Rails Configurations](#27-related-rails-configurations)
+  * [2.8 Configuring Shared Pool Mode (MySQL)](#28-configuring-shared-pool-mode-mysql)
 - [Documentation "work in progress"](#documentation-work-in-progress)
   * [Active Record API](#active-record-api)
   * [Caching](#caching)
@@ -66,7 +67,7 @@ The goal is that developers will rarely need to think about managing tenant isol
 
 ### 1.2 High-level implementation
 
-Active Record Tenanted extends Active Record to dynamically create a Connection Pool for a tenant on demand. It does this in a thread-safe way by relying heavily on Rails' horizontal sharding features.
+Active Record Tenanted extends Active Record to dynamically create a Connection Pool for a tenant on demand. It does this in a thread-safe way by relying heavily on Rails' horizontal sharding features. For MySQL databases, the gem additionally supports a shared pool mode where all tenants share a single connection pool per role, with tenant switching performed via session-level `USE` statements. This drastically reduces memory and connection overhead at high tenant cardinality.
 
 It extends Rails' testing frameworks so that tests don't need to explicitly set up a tenant or otherwise be aware of tenanting (unless tenanting behavior is explicitly being tested).
 
@@ -390,6 +391,55 @@ TODO:
   - `active_record.check_schema_cache_dump_version = false`
 
 
+### 2.8 Configuring Shared Pool Mode (MySQL)
+
+By default, Active Record Tenanted creates a separate connection pool for each tenant. This works well for SQLite and low-cardinality MySQL deployments, but at high tenant counts (thousands of tenants) the per-tenant pool model can cause excessive memory usage, file descriptor pressure, and latency spikes from frequent pool recreation.
+
+For MySQL databases, Active Record Tenanted supports a **shared pool mode** where all tenants share a single connection pool per role. Tenant switching is performed via MySQL's `USE` statement at connection checkout time.
+
+To enable shared pool mode, add `shared_pool: true` and `untenanted_database` to the tenanted database configuration:
+
+``` yaml
+production:
+  primary:
+    adapter: mysql2          # or trilogy
+    tenanted: true
+    database: app_%{tenant}
+    shared_pool: true
+    untenanted_database: information_schema
+    prepared_statements: false
+```
+
+The `untenanted_database` is the database that idle connections are reset to on checkin. It must be accessible by the connection user (e.g. `information_schema`).
+
+Shared pool mode has the following constraints:
+
+- **Adapter**: must be `mysql2` or `trilogy`. Shared pool mode uses `USE <db>`, which is MySQL-specific.
+- **Prepared statements**: must be `false`. Prepared statement caches are tied to a specific database and cannot be shared across tenants.
+- **Host templating**: `%{tenant}` in the `host` config is not supported because a single shared pool implies a single host.
+- **Database name length**: the full database name (after tenant interpolation) must not exceed 64 characters (MySQL's limit).
+
+The shared pool implementation uses a dual-layer safety model:
+
+1. **Layer 1 (adapter callbacks)**: the `SharedPool` module, included into MySQL adapters via Railtie load hooks, switches the connection to the correct tenant database on checkout and resets it to the fallback database on checkin.
+2. **Layer 2 (tenant context reconciliation)**: `with_tenant` and `current_tenant=` reconcile any leased connection to the current tenant, handling sticky leases and nested `with_tenant` calls.
+
+Failed `USE` statements discard the connection entirely (`throw_away!`) and raise a typed error. Tenant switching inside an open transaction is prohibited and raises `TenantSwitchInTransactionError`. Query cache keys are automatically tenant-namespaced to prevent cross-tenant cache hits.
+
+All existing subsystems (Active Job, Action Cable, Active Storage, Action Mailer, Console, Testing) work unchanged with shared pool mode because they interact through the tenant context API (`with_tenant`, `current_tenant`), not through pool internals.
+
+The `host` configuration also supports tenant interpolation for per-tenant host routing (in non-shared-pool mode):
+
+``` yaml
+production:
+  primary:
+    adapter: mysql2
+    tenanted: true
+    database: app_%{tenant}
+    host: "%{tenant}.db.example.com"
+```
+
+
 ## Documentation "work in progress"
 
 ### Active Record API
@@ -400,7 +450,8 @@ Documentation outline:
   - `.with_tenant` and `.current_tenant=`
     - and the callbacks for each, `:with_tenant` and `:set_current_tenant`
   - validation
-    - invalid characters in a tenant name (which is database-dependent)
+    - invalid characters in a tenant name (which is database-dependent: path separators for SQLite, backticks/non-printable for MySQL)
+    - MySQL 64-character database name limit (validated on the full interpolated name)
     - and how the application may want to do additional validation (e.g. ICANN subdomain restrictions)
   - `#tenant` is a readonly attribute on all tenanted model instances
   - `.current_tenant` returns the execution context for the model connection class
@@ -438,7 +489,40 @@ TODO:
   - [x] `#database_path_for(tenant_name)`
   - [x] `#tenants` returns all the tenants on disk (for iteration)
   - [x] raise an exception if tenant name contains a path separator
+  - [x] `#host_for(tenant_name)` for per-tenant host routing
+  - [x] MySQL database name 64-character limit validation in `#database_for`
+  - [x] `#shared_pool?` predicate
+  - [x] `#fallback_database`
+  - [x] `#build_shared_pool_config`
+  - [x] `#validate_shared_pool` (adapter, fallback db, host templating, prepared statements)
   - [ ] bucketed database paths
+
+- implement MySQL database adapter (`AR::Tenanted::DatabaseAdapters::MySQL`)
+  - [x] create `DatabaseAdapters::MySQL` class following SQLite adapter interface
+  - [x] register `mysql2` and `trilogy` adapters in `DatabaseAdapter`
+  - [x] Zeitwerk inflection for `"mysql" => "MySQL"`
+  - [x] `tenant_databases` via `SHOW DATABASES LIKE` with connection quoting
+  - [x] `validate_tenant_name` for MySQL identifier constraints
+  - [x] `create_database` with charset/collation options
+  - [x] `drop_database`, `database_exist?` via `information_schema.schemata`
+  - [x] `with_server_connection` helper (adapter-agnostic error handling)
+  - [x] `test_workerize` with double-suffix guard
+
+- implement shared pool mode
+  - [x] `TenantSwitchError`, `TenantResetError`, `TenantSwitchInTransactionError` error classes
+  - [x] `SHARED_POOL_SHARD` sentinel constant in `Tenant`
+  - [x] `pool_shard_for` single decision point for physical shard key
+  - [x] shared pool creation in `_create_tenanted_pool` via `build_shared_pool_config`
+  - [x] shared pool guard in `destroy_tenant` (drop database, never remove shared pool)
+  - [x] `SharedPool` adapter module with `:checkout` and `:checkin` callbacks
+  - [x] `apply_current_tenant` (checkout): switch to tenant DB via `USE`
+  - [x] `reset_to_fallback` (checkin): reset to fallback DB, discard on failure
+  - [x] `switch_tenant_database`: no-op guard, transaction guard, `throw_away!` on failure
+  - [x] `NamespaceStore` for tenant-namespaced query cache keys
+  - [x] `ensure_shared_pool_tenant_switch` reconciliation method (Layer 2)
+  - [x] `with_tenant` restructured with ensure-based reconciliation
+  - [x] `:after :set_current_tenant` callback for shared pool switching
+  - [x] Railtie load hooks for `mysql2` and `trilogy` adapters to include `SharedPool`
 
 - implement `AR::Tenanted::DatabaseConfigurations::TenantConfig`
   - [x] make sure the logs include the tenant name (via `#new_connection`)
@@ -588,6 +672,7 @@ Documentation outline:
 - explain why we're not worried about russian doll caching
 - explain why calling Rails.cache directly requires care that it's either explicitly tenanted or global
 - explain why we're not worried about sql query caching (it belongs to the connection pool)
+- explain how shared pool mode namespaces query cache keys by tenant database (`NamespaceStore`)
 
 
 TODO:
@@ -595,6 +680,7 @@ TODO:
 - [x] make basic fragment caching work
 - [x] investigate: is collection caching going to be tenanted properly
 - [x] investigate: make sure the QueryCache executor is clearing query caches for tenanted pool
+- [x] tenant-namespaced query cache for shared pool mode (`NamespaceStore`)
 - [x] do we need to do some exploration on how to make sure all caching is tenanted?
   - I'm making the call not to pursue this. Rails.cache is a primitive. Just document it.
 

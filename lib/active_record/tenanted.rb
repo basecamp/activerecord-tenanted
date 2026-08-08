@@ -6,6 +6,7 @@ require "zeitwerk"
 loader = Zeitwerk::Loader.for_gem_extension(ActiveRecord)
 loader.inflector.inflect(
   "sqlite" => "SQLite",
+  "mysql" => "MySQL",
 )
 loader.setup
 
@@ -40,6 +41,15 @@ module ActiveRecord
 
     # Raised when an unsupported database adapter is used.
     class UnsupportedDatabaseError < Error; end
+
+    # Raised when a tenant database switch via USE fails.
+    class TenantSwitchError < Error; end
+
+    # Raised when resetting a connection to the fallback database fails during checkin.
+    class TenantResetError < Error; end
+
+    # Raised when a tenant switch is attempted while a database transaction is open.
+    class TenantSwitchInTransactionError < Error; end
 
     # Return the constantized connection class configured in `config.active_record_tenanted.connection_class`,
     # or nil if none is configured.
