@@ -125,6 +125,32 @@ describe ActiveRecord::Tenanted::Base do
           assert_same_elements([ "id", "email", "created_at", "updated_at" ],
                                User.schema_cache.columns("users")&.map(&:name))
         end
+
+        test "no warning is emitted" do
+          assert_silent do
+            User.new
+          end
+        end
+      end
+
+      describe "when an outdated schema cache dump file exists" do
+        setup { with_schema_cache_dump_file }
+        setup { with_new_migration_file }
+
+        test "the schema cache dump is ignored and models can not be created" do
+          assert_output(nil, /Ignoring .*schema_cache\.yml because it has expired/) do
+            assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+              User.new
+            end
+          end
+        end
+
+        test "the active record railtie will not eager load the schema" do
+          # the code here should mirror the "active_record.define_attribute_methods" initializer
+          assert_output(nil, /Ignoring .*schema_cache\.yml because it has expired/) do
+            assert_not(User.connection_pool.schema_reflection.cached?(User.table_name))
+          end
+        end
       end
     end
   end
