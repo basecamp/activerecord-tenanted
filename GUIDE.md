@@ -397,7 +397,7 @@ The gem does its own version check at the point where it loads the dump:
 
 When the versions do not match, the gem prints a warning and ignores the dump. A tenanted connection pool then reads the schema from its database. Outside of a tenant context there is no fallback, and building a model raises `NoTenantError`.
 
-The dump is written when a tenant database is migrated in the development environment, or in any environment when the `ARTENANT_SCHEMA_DUMP` environment variable is set. Run `bin/rails db:migrate` in development to write a new dump.
+The dump is written when a tenant database is migrated in the development environment, or in any environment when the `ARTENANT_SCHEMA_DUMP` environment variable is set. The dump is also written when the existing dump does not match the database, for example after a schema load or a change of branch. Run `bin/rails db:migrate` in development to write a new dump. If the development database is ahead of the migration files, run `bin/rails db:reset:NAME` instead, where `NAME` is the name of the tenanted database configuration. This drops the development tenant databases and creates them again.
 
 
 ## Documentation "work in progress"

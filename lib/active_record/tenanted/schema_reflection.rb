@@ -29,7 +29,8 @@ module ActiveRecord
             warn "Ignoring #{@cache_path} because it has expired. " \
                  "The current schema version is #{current_version}, " \
                  "but the one in the schema cache file is #{new_cache.schema_version}. " \
-                 "Run `bin/rails db:migrate` in the development environment to write a new schema cache dump."
+                 "Run `bin/rails db:migrate` in the development environment to write a new schema cache dump. " \
+                 "If the development database is ahead of the migration files, run `bin/rails db:reset:NAME` instead."
             return
           end
 

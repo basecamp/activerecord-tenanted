@@ -108,7 +108,7 @@ module ActiveRecord
             end
 
             cache_dump = ActiveRecord::Tasks::DatabaseTasks.cache_dump_filename(config)
-            if migrated || !File.exist?(cache_dump)
+            if migrated || schema_cache_dump_expired?(pool, cache_dump)
               ActiveRecord::Tasks::DatabaseTasks.dump_schema_cache(pool, cache_dump)
             end
           end
@@ -117,6 +117,14 @@ module ActiveRecord
 
       def verbose?
         self.class.verbose?
+      end
+
+      # A schema load, or a change of branch, can leave a schema cache dump in place that does not
+      # match the database. The dump is expired when it is missing, or when its version is not the
+      # schema version of the database.
+      def schema_cache_dump_expired?(pool, cache_dump)
+        cache = ActiveRecord::ConnectionAdapters::SchemaCache._load_from(cache_dump)
+        cache.nil? || cache.schema_version != pool.migration_context.current_version
       end
 
       def register_rake_tasks
