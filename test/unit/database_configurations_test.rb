@@ -46,6 +46,27 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
             assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo\"bar") }
             assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo`bar") }
           end
+
+          test "raises if the tenant name is empty" do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("") }
+          end
+
+          test "raises if the tenant name begins with a dot" do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for(".") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("..") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for(".hidden") }
+          end
+
+          test "raises if the tenant name contains a character that is special in a URI" do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo%2ebar") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo?bar") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo#bar") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo[bar") }
+          end
+
+          test "accepts the RFC 3986 unreserved characters" do
+            assert_nothing_raised { config.database_for("a-b_c.d~9") }
+          end
         end
 
         def assert_all_tenants_found
@@ -223,13 +244,13 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
     end
 
     with_scenario(:primary_db, :primary_record) do
-      test "handles non-alphanumeric characters" do
+      test "finds a tenant whose name uses the allowed punctuation" do
         assert_empty(base_config.tenants)
 
-        crazy_name = 'a~!@#$%^&*()_-+=:;[{]}|,.?9' # please don't do this
-        TenantedApplicationRecord.create_tenant(crazy_name)
+        punctuated_name = "a-b_c.d~9"
+        TenantedApplicationRecord.create_tenant(punctuated_name)
 
-        assert_equal([ crazy_name ], base_config.tenants)
+        assert_equal([ punctuated_name ], base_config.tenants)
       end
     end
   end
