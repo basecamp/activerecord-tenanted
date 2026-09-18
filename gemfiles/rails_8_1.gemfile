@@ -15,6 +15,7 @@ gem "solid_queue"
 gem "stimulus-rails"
 gem "tailwindcss-rails"
 gem "turbo-rails"
+gem "json", "< 3"
 
 group :development, :test do
   gem "appraisal", "2.5.0", require: false
