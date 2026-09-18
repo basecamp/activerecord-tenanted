@@ -1,5 +1,18 @@
 # `activerecord-tenanted` Changelog
 
+## next / unreleased
+
+### Security
+
+- Tenant names are now validated against an allowlist, closing a path traversal. A name like `..` or, under a URI database template, `%2e%2e`, resolved to a database path outside the per-tenant directory, so an application that passed an untrusted string to `create_tenant` or `destroy_tenant` created, migrated, or deleted a database there. See https://github.com/basecamp/activerecord-tenanted/security/advisories/GHSA-598c-gg29-6wvh for more information. @flavorjones
+
+### Breaking change: tenant names
+
+A tenant name may now contain only the RFC 3986 unreserved characters, which are letters, digits, `-`, `.`, `_`, and `~`, and may not begin with a dot. `create_tenant`, `destroy_tenant`, `with_tenant`, and `current_tenant=` raise `BadTenantNameError` for any other name, so a name is checked as the tenant context is set and not only when a database path is built. The Active Storage disk service checks the name again, because Rails' own `connected_to` can set the context without passing through this gem. `tenant_exist?` returns `false` for such a name instead of raising, so a request that resolves to an invalid tenant is a 404 as it was before.
+
+An existing database whose directory name is no longer valid is skipped by `tenants` and `with_each_tenant`, and a warning is logged naming the file. Rename those directories before upgrading. @flavorjones
+
+
 ## v0.8.0 / 2026-08-04
 
 ### Breaking change: serialized payloads carry the tenant
