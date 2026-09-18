@@ -25,8 +25,8 @@ module ActiveRecord
         # path may be a URI (see #path_for), so a name is limited to the RFC 3986 unreserved
         # characters and may not begin with a dot. A leading dot either traverses out of the tenant
         # directory or hides the database from the glob in #tenant_databases; "%" is percent-decoded
-        # by SQLite when it opens a URI filename; "?" and "#" truncate the path; and the remaining
-        # punctuation makes URI.parse raise.
+        # by SQLite when it opens a URI filename; "?" and "#" truncate the path; and other
+        # punctuation is either reserved in a URI or makes URI.parse raise.
         TENANT_NAME_PATTERN = /\A[A-Za-z0-9_~-][A-Za-z0-9._~-]*\z/
 
         def tenant_databases

@@ -244,10 +244,10 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
     end
 
     with_scenario(:primary_db, :primary_record) do
-      test "handles non-alphanumeric characters" do
+      test "finds a tenant whose name uses the allowed punctuation" do
         assert_empty(base_config.tenants)
 
-        punctuated_name = "a-b_c.d~9" # please don't do this
+        punctuated_name = "a-b_c.d~9"
         TenantedApplicationRecord.create_tenant(punctuated_name)
 
         assert_equal([ punctuated_name ], base_config.tenants)
