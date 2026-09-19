@@ -28,5 +28,14 @@ describe ActiveRecord::Tenanted::UntenantedConnectionPool do
     test "clear_query_cache does nothing" do
       assert_nil subject.clear_query_cache
     end
+
+    describe "schema_reflection" do
+      let(:subject) { ActiveRecord::Tenanted::UntenantedConnectionPool.new(base_config, User) }
+
+      test "checks the schema cache dump against the migration files" do
+        assert_instance_of(ActiveRecord::Tenanted::UntenantedConnectionPool::SchemaReflection, subject.schema_reflection)
+        assert_equal(File.join(db_path, "tenanted_migrations"), subject.migrations_paths)
+      end
+    end
   end
 end

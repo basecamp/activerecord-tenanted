@@ -998,9 +998,12 @@ describe ActiveRecord::Tenanted::Tenant do
         setup { with_new_migration_file }
 
         describe "before a connection is made" do
-          test "models can be created but migration is not applied" do
-            assert_same_elements([ "id", "email", "created_at", "updated_at" ],
-                                 User.new.attributes.keys)
+          test "the schema cache dump is ignored and models can not be created" do
+            assert_output(nil, /Ignoring .*schema_cache\.yml because it has expired/) do
+              assert_raises(ActiveRecord::Tenanted::NoTenantError) do
+                User.new
+              end
+            end
           end
         end
 
@@ -1019,6 +1022,39 @@ describe ActiveRecord::Tenanted::Tenant do
             assert_equal(20250213005959, version)
             assert_same_elements([ "id", "email", "created_at", "updated_at", "age" ],
                                  User.new.attributes.keys)
+          end
+
+          describe "and the schema cache dump is not rewritten" do
+            # The test suite sets ARTENANT_SCHEMA_DUMP so that migrations rewrite the dump. An
+            # application test suite does not, so the outdated dump stays on disk.
+            setup { @schema_dump_was, ENV["ARTENANT_SCHEMA_DUMP"] = ENV["ARTENANT_SCHEMA_DUMP"], nil }
+            teardown { ENV["ARTENANT_SCHEMA_DUMP"] = @schema_dump_was }
+
+            test "the schema cache dump is ignored and the database schema is used" do
+              TenantedApplicationRecord.create_tenant("foo")
+
+              assert_output(nil, /Ignoring .*schema_cache\.yml because it has expired/) do
+                TenantedApplicationRecord.with_tenant("foo") do
+                  assert_same_elements([ "id", "email", "created_at", "updated_at", "age" ],
+                                       User.new.attributes.keys)
+                end
+              end
+            end
+          end
+        end
+      end
+
+      describe "when a current schema cache dump file exists" do
+        setup { with_schema_cache_dump_file }
+
+        test "the schema cache dump is used without a warning" do
+          TenantedApplicationRecord.create_tenant("foo")
+
+          assert_silent do
+            TenantedApplicationRecord.with_tenant("foo") do
+              assert_same_elements([ "id", "email", "created_at", "updated_at" ],
+                                   User.new.attributes.keys)
+            end
           end
         end
       end
@@ -1238,6 +1274,12 @@ describe ActiveRecord::Tenanted::Tenant do
         TenantedApplicationRecord.create_tenant("foo") do
           assert_same(User.connection_pool, Post.connection_pool)
           assert_same(TenantedApplicationRecord.connection_pool, User.connection_pool)
+        end
+      end
+
+      test "connection pools check the schema cache dump against the database" do
+        TenantedApplicationRecord.create_tenant("foo") do
+          assert_instance_of(ActiveRecord::Tenanted::SchemaReflection, User.connection_pool.schema_reflection)
         end
       end
 
@@ -1922,7 +1964,9 @@ describe ActiveRecord::Tenanted::Tenant do
             User.create!(email: "user1@example.org")
           end
 
-          assert_match(/\A#<User tenant: "foo", id:/, user.inspect)
+          # Rails 8.1 stores the columns in the schema cache dump sorted by name, so the attribute
+          # order in #inspect depends on whether the columns came from the dump or the database.
+          assert_match(/\A#<User tenant: "foo", .*\bid: 1\b/, user.inspect)
         end
       end
     end

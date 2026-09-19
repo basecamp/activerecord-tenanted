@@ -90,7 +90,9 @@ module ActiveRecord
         config.active_record.use_schema_cache_dump = true
 
         # The schema cache version check needs to query the database, which isn't always possible
-        # for tenanted models.
+        # for tenanted models. Rails also only defines attribute methods at boot when this check is
+        # off. This gem does its own version check in Tenanted::SchemaReflection, at the point
+        # where the dump is loaded for a tenanted model.
         config.active_record.check_schema_cache_dump_version = false
       end
 

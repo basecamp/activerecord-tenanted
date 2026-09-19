@@ -88,6 +88,31 @@ describe ActiveRecord::Tenanted::DatabaseTasks do
         end
       end
 
+      describe "when schema dump file and schema cache dump file exist" do
+        setup { with_schema_dump_file }
+        setup { with_schema_cache_dump_file }
+
+        let(:cache_dump) { ActiveRecord::Tasks::DatabaseTasks.cache_dump_filename(base_config) }
+
+        test "a current schema cache dump file is not rewritten" do
+          FileUtils.touch(cache_dump, mtime: Time.now - 60)
+          mtime_was = File.mtime(cache_dump)
+
+          ActiveRecord::Tenanted::DatabaseTasks.new(base_config).migrate_tenant("foo")
+
+          assert_equal(mtime_was, File.mtime(cache_dump))
+        end
+
+        test "a schema cache dump file with another version is rewritten" do
+          File.write(cache_dump, File.read(cache_dump).sub(/^version: .*$/, "version: 20250213005959"))
+
+          ActiveRecord::Tenanted::DatabaseTasks.new(base_config).migrate_tenant("foo")
+
+          cache = ActiveRecord::ConnectionAdapters::SchemaCache._load_from(cache_dump)
+          assert_equal(20250203191115, cache.schema_version)
+        end
+      end
+
       describe "when an outdated schema cache dump file exists" do
         setup { with_schema_cache_dump_file }
         setup { with_new_migration_file }

@@ -326,6 +326,7 @@ module ActiveRecord
             raise TenantDoesNotExistError, "The database for tenant #{tenant.inspect} does not exist."
           end
           pool = establish_connection(db_config)
+          pool.schema_reflection = Tenanted::SchemaReflection.new(ActiveRecord::Tasks::DatabaseTasks.cache_dump_filename(db_config))
 
           if schema_version_check
             pending_migrations = pool.migration_context.open.pending_migrations

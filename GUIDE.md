@@ -383,11 +383,21 @@ TODO:
 
 ### 2.7 Related Rails Configurations
 
-TODO:
+Active Record Tenanted sets two Rails options in its railtie:
 
-- explain why we set some options
-  - `active_record.use_schema_cache_dump = true`
-  - `active_record.check_schema_cache_dump_version = false`
+- `active_record.use_schema_cache_dump = true`
+- `active_record.check_schema_cache_dump_version = false`
+
+Rails must be able to load the schema of a tenanted model without a database connection, for example when it eager loads models at boot, or when `User.new` is called to build a form outside of a tenant context. There is no tenant at that point, so there is no database to query. The gem reads the schema from the schema cache dump instead, which is why the dump is required and the Rails version check, which queries the database, is turned off.
+
+The gem does its own version check at the point where it loads the dump:
+
+- A tenanted connection pool compares the version in the dump with the schema version of the tenant database, as Rails does.
+- Outside of a tenant context, there is no database, so the gem compares the version in the dump with the latest migration file in the `migrations_paths` of the tenanted database configuration.
+
+When the versions do not match, the gem prints a warning and ignores the dump. A tenanted connection pool then reads the schema from its database. Outside of a tenant context there is no fallback, and building a model raises `NoTenantError`.
+
+The dump is written when a tenant database is migrated in the development environment, or in any environment when the `ARTENANT_SCHEMA_DUMP` environment variable is set. The dump is also written when the existing dump does not match the database, for example after a schema load or a change of branch. Run `bin/rails db:migrate` in development to write a new dump. If the development database is ahead of the migration files, run `bin/rails db:reset:NAME` instead, where `NAME` is the name of the tenanted database configuration. This drops the development tenant databases and creates them again.
 
 
 ## Documentation "work in progress"
