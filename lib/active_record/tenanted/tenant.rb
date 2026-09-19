@@ -189,6 +189,8 @@ module ActiveRecord
       CONNECTION_POOL_CREATION_LOCK = Thread::Mutex.new # :nodoc:
 
       class_methods do
+        include CrossTenantAssociations::ClassMethods
+
         def tenanted?
           true
         end
