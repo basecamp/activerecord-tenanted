@@ -28,7 +28,7 @@ module ActiveRecord
           Dir.glob(glob).filter_map do |path|
             result = path.scan(scanner).flatten.first
             if result.nil?
-              Rails.logger.warn "ActiveRecord::Tenanted: Cannot parse tenant name from filename #{path.inspect}"
+              ActiveRecord::Base.logger&.warn "ActiveRecord::Tenanted: Cannot parse tenant name from filename #{path.inspect}"
             end
             result
           end

@@ -25,6 +25,8 @@ module ActiveRecord
       end
 
       register "sqlite3", "ActiveRecord::Tenanted::DatabaseAdapters::SQLite"
+      register "mysql2",  "ActiveRecord::Tenanted::DatabaseAdapters::MySQL"
+      register "trilogy", "ActiveRecord::Tenanted::DatabaseAdapters::MySQL"
     end
   end
 end
