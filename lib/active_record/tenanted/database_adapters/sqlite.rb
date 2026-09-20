@@ -80,21 +80,18 @@ module ActiveRecord
         def test_workerize(db, test_worker_id)
           test_worker_suffix = "_#{test_worker_id}"
 
-          if db.start_with?("file:") && db.include?("?")
-            db.sub(/(\?.*)$/, "#{test_worker_suffix}\\1")
-          else
-            # This check is needed because of https://github.com/rails/rails/pull/55769 adding
-            # replicas to the parallelization setup by using `include_hidden: true` which pulls in
-            # the BaseConfig. We don't want to double-suffix the database name.
-            #
-            # TODO: Ideally we should have finer-grained filtering of database configurations in Rails
-            # (other than simply hidden or not-hidden).
-            if db.end_with?(test_worker_suffix)
-              db
-            else
-              db + test_worker_suffix
-            end
-          end
+          # The suffix goes before the query params of a URI.
+          path, query = db.start_with?("file:") ? db.split("?", 2) : [ db, nil ]
+
+          # This check is needed because of https://github.com/rails/rails/pull/55769 adding
+          # replicas to the parallelization setup by using `include_hidden: true` which pulls in
+          # the BaseConfig. We don't want to double-suffix the database name.
+          #
+          # TODO: Ideally we should have finer-grained filtering of database configurations in Rails
+          # (other than simply hidden or not-hidden).
+          path += test_worker_suffix unless path.end_with?(test_worker_suffix)
+
+          query ? "#{path}?#{query}" : path
         end
 
         # A sqlite database path can be a file path or a URI (either relative or absolute).  We
