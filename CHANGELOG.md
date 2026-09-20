@@ -1,5 +1,12 @@
 # `activerecord-tenanted` Changelog
 
+## next / unreleased
+
+### Fixed
+
+- The test worker suffix is no longer added a second time to a SQLite database URI that has query params. The check for an existing suffix covered a file path and a URI without query params, but not a URI like `file:storage/%{tenant}/main.sqlite3?vfs=unix-dotfile`, which became `main.sqlite3_1_1?vfs=unix-dotfile` in a parallel test run. @jamesridgway
+
+
 ## v0.8.0 / 2026-08-04
 
 ### Breaking change: serialized payloads carry the tenant
