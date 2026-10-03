@@ -9,6 +9,11 @@ appraise "rails-8-1" do
   gem "json", "< 3"
 end
 
+appraise "rails-8-1-minimum" do
+  gem "rails", "= 8.1.2.1"
+  gem "json", "< 3"
+end
+
 appraise "rails-edge" do
   gem "rails", github: "rails/rails", branch: "main"
 end

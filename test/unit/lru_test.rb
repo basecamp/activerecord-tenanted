@@ -99,4 +99,46 @@ describe ActiveRecord::Tenanted::LRU do
     assert_equal 0, lru.size
     assert_equal [], lru.keys
   end
+
+  test "peek reads a value without changing oldest-first order" do
+    oldest = Object.new
+    newest = Object.new
+    lru[:oldest] = oldest
+    lru[:newest] = newest
+
+    assert_same oldest, lru.peek(:oldest)
+    assert_equal [ :oldest, :newest ], lru.snapshot.map(&:first)
+    assert_equal [ :oldest, :newest ], lru.keys
+  end
+
+  test "snapshot preserves oldest-first entries and is a copy" do
+    lru[:first] = Object.new
+    lru[:second] = Object.new
+
+    snapshot = lru.snapshot
+    lru[:third] = Object.new
+
+    assert_equal [ :first, :second ], snapshot.map(&:first)
+    assert_equal 2, snapshot.length
+  end
+
+  test "conditional delete leaves a replacement value in place" do
+    previous = Object.new
+    replacement = Object.new
+    lru[:tenant] = previous
+    lru[:tenant] = replacement
+
+    assert_not lru.delete_if_same(:tenant, previous)
+    assert_same replacement, lru.peek(:tenant)
+    assert_equal [ :tenant ], lru.keys
+  end
+
+  test "conditional delete removes only the matching value" do
+    value = Object.new
+    lru[:tenant] = value
+
+    assert lru.delete_if_same(:tenant, value)
+    assert_nil lru.peek(:tenant)
+    assert_empty lru.keys
+  end
 end

@@ -26,6 +26,9 @@ module ActiveRecord
     # Raised when attempting to create a tenant that already exists.
     class TenantExistsError < Error; end
 
+    # Raised when no idle tenant connection pool can be retired to make room for a new pool.
+    class ConnectionPoolCapacityError < Error; end
+
     # Raised when attempting to create a tenant with illegal characters in it.
     class BadTenantNameError < Error; end
 

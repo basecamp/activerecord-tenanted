@@ -183,11 +183,13 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
     end
 
     describe "max_connection_pools" do
-      test "defaults to 50" do
-        config_hash = { adapter: "sqlite3", database: "database" }
-        config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new("test", "foo", config_hash)
+      [ {}, { max_connection_pools: nil } ].each do |options|
+        test "defaults to 50 when #{options.empty? ? "omitted" : "nil"}" do
+          config_hash = { adapter: "sqlite3", database: "database" }.merge(options)
+          config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new("test", "foo", config_hash)
 
-        assert_equal(50, config.max_connection_pools)
+          assert_equal(50, config.max_connection_pools)
+        end
       end
 
       test "can be set in the config" do
@@ -195,6 +197,17 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
         config = ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new("test", "foo", config_hash)
 
         assert_equal(99, config.max_connection_pools)
+      end
+
+      [ 0, -1, 1.5, "2", false ].each do |maximum|
+        test "rejects #{maximum.inspect} during configuration" do
+          config_hash = { adapter: "sqlite3", database: "database", max_connection_pools: maximum }
+
+          error = assert_raises(ActiveRecord::Tenanted::TenantConfigurationError) do
+            ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new("test", "foo", config_hash)
+          end
+          assert_includes error.message, "max_connection_pools must be a positive integer"
+        end
       end
     end
 

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "thread"
+require "timeout"
 require "test_helper"
 
 describe ActiveRecord::Tenanted::Tenant do
@@ -1231,6 +1233,559 @@ describe ActiveRecord::Tenanted::Tenant do
           assert_equal max, tenant_pools.size
         end
       end
+
+      test "busy connection pools are not reaped when they exceed the max" do
+        root_config = TenantedApplicationRecord.tenanted_root_config
+
+        root_config.stub :max_connection_pools, 2 do
+          TenantedApplicationRecord.create_tenant("tenant-busy-a") { User.count }
+          pool_a = TenantedApplicationRecord.with_tenant("tenant-busy-a") { User.connection_pool }
+          TenantedApplicationRecord.create_tenant("tenant-idle-b") { User.count }
+          handler = TenantedApplicationRecord.connection_handler
+
+          TenantedApplicationRecord.with_tenant("tenant-busy-a", prohibit_shard_swapping: false) do
+            pool_a.with_connection do |connection|
+              TenantedApplicationRecord.create_tenant("tenant-third-c") { User.count }
+
+              assert_equal 1, connection.select_value("SELECT 1")
+
+              registered_pool_a = handler.retrieve_connection_pool(
+                TenantedApplicationRecord.connection_specification_name,
+                role: :writing,
+                shard: "tenant-busy-a",
+                strict: false)
+              registered_pool_b = handler.retrieve_connection_pool(
+                TenantedApplicationRecord.connection_specification_name,
+                role: :writing,
+                shard: "tenant-idle-b",
+                strict: false)
+              registered_pool_c = handler.retrieve_connection_pool(
+                TenantedApplicationRecord.connection_specification_name,
+                role: :writing,
+                shard: "tenant-third-c",
+                strict: false)
+
+              assert_same pool_a, registered_pool_a
+              assert_nil registered_pool_b
+              assert_kind_of ActiveRecord::ConnectionAdapters::ConnectionPool, registered_pool_c
+              assert_equal 2, [ registered_pool_a, registered_pool_b, registered_pool_c ].compact.size
+
+              TenantedApplicationRecord.with_tenant("tenant-busy-a") do
+                assert_same pool_a, User.connection_pool
+              end
+            end
+          end
+        end
+      end
+
+      test "tenant creation is rejected when every pool is busy" do
+        root_config = TenantedApplicationRecord.tenanted_root_config
+        tenant_a = "tenant-busy-a"
+        tenant_b = "tenant-busy-b"
+        tenant_c = "tenant-third-c"
+
+        root_config.stub :max_connection_pools, 2 do
+          TenantedApplicationRecord.create_tenant(tenant_a) { User.count }
+          pool_a = TenantedApplicationRecord.with_tenant(tenant_a) { User.connection_pool }
+          TenantedApplicationRecord.create_tenant(tenant_b) { User.count }
+          pool_b = TenantedApplicationRecord.with_tenant(tenant_b) { User.connection_pool }
+          handler = TenantedApplicationRecord.connection_handler
+          tenant_c_config = root_config.new_tenant_config(tenant_c)
+          assert_not File.exist?(tenant_c_config.database)
+          established_shards = []
+          adapter_databases = []
+          original_establish_connection = handler.method(:establish_connection)
+          establish_connection = lambda do |*args, **options|
+            established_shards << options[:shard].to_s
+            original_establish_connection.call(*args, **options)
+          end
+          adapter_class = ActiveRecord::ConnectionAdapters::SQLite3Adapter
+          original_adapter_new = adapter_class.method(:new)
+          adapter_new = lambda do |config, **options|
+            adapter_databases << config[:database].to_s
+            original_adapter_new.call(config, **options)
+          end
+
+          TenantedApplicationRecord.with_tenant(tenant_a, prohibit_shard_swapping: false) do
+            pool_a.with_connection do |connection_a|
+              pool_b.with_connection do |connection_b|
+                error = nil
+                adapter_class.stub :new, adapter_new do
+                  handler.stub :establish_connection, establish_connection do
+                    error = assert_raises(StandardError) do
+                      TenantedApplicationRecord.create_tenant(tenant_c)
+                    end
+                  end
+                end
+
+                assert_equal "ActiveRecord::Tenanted::ConnectionPoolCapacityError", error.class.name
+                assert_equal tenant_a, TenantedApplicationRecord.current_tenant
+                assert_not File.exist?(tenant_c_config.database)
+                assert_not_includes established_shards, tenant_c
+                assert_not adapter_databases.any? { |database| File.basename(database) == File.basename(tenant_c_config.database) }
+                assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ tenant_c, :writing ]
+                assert_same pool_a, User.connection_pool
+                assert_same pool_a, handler.retrieve_connection_pool(
+                  TenantedApplicationRecord.connection_specification_name,
+                  role: :writing,
+                  shard: tenant_a,
+                  strict: false)
+                assert_same pool_b, handler.retrieve_connection_pool(
+                  TenantedApplicationRecord.connection_specification_name,
+                  role: :writing,
+                  shard: tenant_b,
+                  strict: false)
+                assert_nil handler.retrieve_connection_pool(
+                  TenantedApplicationRecord.connection_specification_name,
+                  role: :writing,
+                  shard: tenant_c,
+                  strict: false)
+                assert_equal 1, connection_a.select_value("SELECT 1")
+                assert_equal 1, connection_b.select_value("SELECT 1")
+              end
+            end
+          end
+        end
+      end
+
+      test "an existing tenant database is not opened when every pool is busy" do
+        root_config = TenantedApplicationRecord.tenanted_root_config
+        tenant_a = "tenant-busy-a"
+        tenant_b = "tenant-busy-b"
+        tenant_c = "tenant-prepared-c"
+
+        root_config.stub :max_connection_pools, 2 do
+          TenantedApplicationRecord.create_tenant(tenant_a) { User.count }
+          pool_a = TenantedApplicationRecord.with_tenant(tenant_a) { User.connection_pool }
+          TenantedApplicationRecord.create_tenant(tenant_b) { User.count }
+          pool_b = TenantedApplicationRecord.with_tenant(tenant_b) { User.connection_pool }
+          handler = TenantedApplicationRecord.connection_handler
+          specification = TenantedApplicationRecord.connection_specification_name
+          tenant_c_config = root_config.new_tenant_config(tenant_c)
+          tenant_c_config.config_adapter.create_database
+          ActiveRecord::Tenanted::DatabaseTasks.new(root_config).migrate_tenant(tenant_c)
+          assert File.exist?(tenant_c_config.database)
+
+          established_shards = []
+          adapter_databases = []
+          original_establish_connection = handler.method(:establish_connection)
+          establish_connection = lambda do |*args, **options|
+            established_shards << options[:shard].to_s
+            original_establish_connection.call(*args, **options)
+          end
+          adapter_class = ActiveRecord::ConnectionAdapters::SQLite3Adapter
+          original_adapter_new = adapter_class.method(:new)
+          adapter_new = lambda do |config, **options|
+            adapter_databases << config[:database].to_s
+            original_adapter_new.call(config, **options)
+          end
+
+          TenantedApplicationRecord.with_tenant(tenant_a, prohibit_shard_swapping: false) do
+            pool_a.with_connection do |connection_a|
+              pool_b.with_connection do |connection_b|
+                error = nil
+                adapter_class.stub :new, adapter_new do
+                  handler.stub :establish_connection, establish_connection do
+                    error = assert_raises(StandardError) do
+                      TenantedApplicationRecord.with_tenant(tenant_c, prohibit_shard_swapping: false) do
+                        User.connection_pool.with_connection { |connection| connection.select_value("SELECT 1") }
+                      end
+                    end
+                  end
+                end
+
+                assert_equal "ActiveRecord::Tenanted::ConnectionPoolCapacityError", error.class.name
+                assert_equal tenant_a, TenantedApplicationRecord.current_tenant
+                assert File.exist?(tenant_c_config.database)
+                assert_not_includes established_shards, tenant_c
+                assert_not adapter_databases.any? { |database| File.basename(database) == File.basename(tenant_c_config.database) }
+                assert_same pool_a, handler.retrieve_connection_pool(specification, role: :writing, shard: tenant_a, strict: false)
+                assert_same pool_b, handler.retrieve_connection_pool(specification, role: :writing, shard: tenant_b, strict: false)
+                assert_nil handler.retrieve_connection_pool(specification, role: :writing, shard: tenant_c, strict: false)
+                assert_equal 1, connection_a.select_value("SELECT 1")
+                assert_equal 1, connection_b.select_value("SELECT 1")
+              end
+            end
+          end
+        end
+      end
+
+      test "failed tenant creation removes its pool and preserves the busy pool" do
+        root_config = TenantedApplicationRecord.tenanted_root_config
+        tenant_a = "tenant-busy-a"
+        tenant_b = "tenant-idle-b"
+        tenant_c = "tenant-create-failure"
+        tenant_b_config = root_config.new_tenant_config(tenant_b)
+        tenant_c_config = root_config.new_tenant_config(tenant_c)
+        migration = File.join(db_path, "tenanted_migrations", "20260102030405_fail_tenant_creation.rb")
+
+        root_config.stub :max_connection_pools, 2 do
+          TenantedApplicationRecord.create_tenant(tenant_a) { User.count }
+          pool_a = TenantedApplicationRecord.with_tenant(tenant_a) { User.connection_pool }
+          TenantedApplicationRecord.create_tenant(tenant_b) { User.count }
+          handler = TenantedApplicationRecord.connection_handler
+
+          begin
+            File.write(migration, <<~RUBY)
+              class FailTenantCreation < ActiveRecord::Migration[8.1]
+                def change
+                  raise "intentional tenant migration failure"
+                end
+              end
+            RUBY
+
+            TenantedApplicationRecord.with_tenant(tenant_a, prohibit_shard_swapping: false) do
+              pool_a.with_connection do |connection|
+                error = assert_raises(StandardError) do
+                  TenantedApplicationRecord.create_tenant(tenant_c)
+                end
+
+                assert_includes error.message, "intentional tenant migration failure"
+                assert_not File.exist?(tenant_c_config.database)
+                assert_same pool_a, handler.retrieve_connection_pool(
+                  TenantedApplicationRecord.connection_specification_name,
+                  role: :writing,
+                  shard: tenant_a,
+                  strict: false)
+                assert_nil handler.retrieve_connection_pool(
+                  TenantedApplicationRecord.connection_specification_name,
+                  role: :writing,
+                  shard: tenant_b,
+                  strict: false)
+                assert File.exist?(tenant_b_config.database)
+                assert_nil handler.retrieve_connection_pool(
+                  TenantedApplicationRecord.connection_specification_name,
+                  role: :writing,
+                  shard: tenant_c,
+                  strict: false)
+                assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ tenant_c, :writing ]
+                assert_equal 1, connection.select_value("SELECT 1")
+              end
+            end
+          ensure
+            FileUtils.rm_f(migration)
+          end
+        end
+      end
+
+      test "a tenant pool stays private to its creator until its migrations finish" do
+        tenant = "tenant-provisional"
+        migration_started = Queue.new
+        continue_migration = Queue.new
+        hooks = Module.new
+        hooks.const_set(:STARTED, migration_started)
+        hooks.const_set(:CONTINUE, continue_migration)
+        ActiveRecord::Tenanted.const_set(:PoolReadinessTestHooks, hooks)
+        begin
+          migration_tasks = ActiveRecord::Tenanted::DatabaseTasks.new(TenantedApplicationRecord.tenanted_root_config)
+          migration_tasks.define_singleton_method(:migrate_tenant) do |_tenant_name|
+            query_result = User.connection_pool.with_connection { |connection| connection.select_value("SELECT 1") }
+            User.release_connection
+            raise "creator could not query during tenant migration" unless query_result == 1
+
+            ActiveRecord::Tenanted::PoolReadinessTestHooks::STARTED << true
+            Timeout.timeout(5) { ActiveRecord::Tenanted::PoolReadinessTestHooks::CONTINUE.pop }
+          end
+
+          ActiveRecord::Tenanted::DatabaseTasks.stub :new, ->(_config) { migration_tasks } do
+            creator = Thread.new do
+              TenantedApplicationRecord.create_tenant(tenant)
+            rescue StandardError => error
+              migration_started << error
+              raise
+            end
+            begin
+              migration_status = Timeout.timeout(5) { migration_started.pop }
+              raise migration_status if migration_status.is_a?(StandardError)
+
+              assert_raises(ActiveRecord::ConnectionNotEstablished) do
+                TenantedApplicationRecord.with_tenant(tenant) { User.count }
+              end
+
+              continue_migration << true
+              assert Timeout.timeout(5) { creator.join }
+              TenantedApplicationRecord.with_tenant(tenant) do
+                User.connection_pool.with_connection { |connection| assert_equal 1, connection.select_value("SELECT 1") }
+              end
+            ensure
+              continue_migration << true
+              creator.kill if creator&.alive?
+              creator&.join(5)
+            end
+          end
+        ensure
+          ActiveRecord::Tenanted.send(:remove_const, :PoolReadinessTestHooks)
+        end
+      end
+
+      test "a pool that cannot be retired after migration failure stays quarantined" do
+        root_config = TenantedApplicationRecord.tenanted_root_config
+        tenant_a = "tenant-busy-a"
+        tenant_b = "tenant-idle-b"
+        tenant_c = "tenant-cleanup-blocked"
+        tenant_c_config = root_config.new_tenant_config(tenant_c)
+        migration = File.join(db_path, "tenanted_migrations", "20260102030405_blocked_cleanup.rb")
+        handler = TenantedApplicationRecord.connection_handler
+        specification = TenantedApplicationRecord.connection_specification_name
+        failed_pool = nil
+        original_establish = handler.method(:establish_connection)
+        establish_connection = lambda do |*args, **options|
+          pool = original_establish.call(*args, **options)
+          if options[:shard].to_s == tenant_c
+            failed_pool = pool
+            pool.define_singleton_method(:try_with_retirement_barriers) { |&| false }
+          end
+          pool
+        end
+
+        root_config.stub :max_connection_pools, 2 do
+          TenantedApplicationRecord.create_tenant(tenant_a) { User.count }
+          pool_a = TenantedApplicationRecord.with_tenant(tenant_a) { User.connection_pool }
+          TenantedApplicationRecord.create_tenant(tenant_b) { User.count }
+
+          File.write(migration, <<~RUBY)
+            class BlockedCleanup < ActiveRecord::Migration[8.1]
+              def change
+                raise "intentional tenant migration failure"
+              end
+            end
+          RUBY
+
+          handler.stub :establish_connection, establish_connection do
+            error = nil
+            TenantedApplicationRecord.with_tenant(tenant_a, prohibit_shard_swapping: false) do
+              pool_a.with_connection do
+                error = assert_raises(StandardError) { TenantedApplicationRecord.create_tenant(tenant_c) }
+              end
+            end
+
+            assert_includes error.message, "intentional tenant migration failure"
+            assert File.exist?(tenant_c_config.database)
+            assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ tenant_c, :writing ]
+            assert_predicate failed_pool, :tenant_pool_failed?
+            assert_same failed_pool, handler.retrieve_connection_pool(specification, role: :writing, shard: tenant_c, strict: false)
+            assert_raises(ActiveRecord::ConnectionNotEstablished) do
+              TenantedApplicationRecord.with_tenant(tenant_c) { User.count }
+            end
+            assert_same pool_a, handler.retrieve_connection_pool(specification, role: :writing, shard: tenant_a, strict: false)
+          end
+        ensure
+          FileUtils.rm_f(migration)
+          if handler.retrieve_connection_pool(specification, role: :writing, shard: tenant_c, strict: false)
+            handler.remove_connection_pool(specification, role: :writing, shard: tenant_c)
+          end
+          TenantedApplicationRecord.tenanted_connection_pools.delete_if_same([ tenant_c, :writing ], failed_pool) if failed_pool
+          tenant_c_config.config_adapter.drop_database if File.exist?(tenant_c_config.database)
+          failed_pool.singleton_class.remove_method(:try_with_retirement_barriers) if failed_pool&.singleton_methods(false)&.include?(:try_with_retirement_barriers)
+        end
+      end
+
+      test "failed cleanup does not wait for a tenant pool monitor" do
+        tenant = "tenant-monitor-held"
+        root_config = TenantedApplicationRecord.tenanted_root_config
+        tenant_config = root_config.new_tenant_config(tenant)
+        handler = TenantedApplicationRecord.connection_handler
+        specification = TenantedApplicationRecord.connection_specification_name
+        monitor_acquired = Queue.new
+        release_monitor = Queue.new
+        held_pool = nil
+        monitor_thread = nil
+        original_establish = handler.method(:establish_connection)
+        establish_connection = lambda do |*args, **options|
+          pool = original_establish.call(*args, **options)
+          if options[:shard].to_s == tenant
+            held_pool = pool
+            monitor_thread = Thread.new do
+              pool.mon_enter
+              monitor_acquired << true
+              Timeout.timeout(5) { release_monitor.pop }
+            ensure
+              pool.mon_exit
+            end
+            Timeout.timeout(5) { monitor_acquired.pop }
+          end
+          pool
+        end
+        migration_tasks = ActiveRecord::Tenanted::DatabaseTasks.new(root_config)
+        migration_tasks.define_singleton_method(:migrate_tenant) do |_tenant_name|
+          raise "intentional migration failure while pool monitor is held"
+        end
+
+        handler.stub :establish_connection, establish_connection do
+          ActiveRecord::Tenanted::DatabaseTasks.stub :new, ->(_config) { migration_tasks } do
+            error = assert_raises(RuntimeError) { TenantedApplicationRecord.create_tenant(tenant) }
+
+            assert_includes error.message, "intentional migration failure"
+            assert File.exist?(tenant_config.database)
+            assert_predicate held_pool, :tenant_pool_failed?
+            assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ tenant, :writing ]
+            assert_raises(ActiveRecord::ConnectionNotEstablished) do
+              TenantedApplicationRecord.with_tenant(tenant) { User.count }
+            end
+          end
+        ensure
+          release_monitor << true
+          monitor_thread&.join(5)
+          monitor_thread&.kill if monitor_thread&.alive?
+          monitor_thread&.join(5)
+          if handler.retrieve_connection_pool(specification, role: :writing, shard: tenant, strict: false)
+            handler.remove_connection_pool(specification, role: :writing, shard: tenant)
+          end
+          TenantedApplicationRecord.tenanted_connection_pools.delete_if_same([ tenant, :writing ], held_pool) if held_pool
+          tenant_config.config_adapter.drop_database if File.exist?(tenant_config.database)
+        end
+      end
+
+      test "disconnect errors preserve the migration error and keep tenant creation closed" do
+        tenant = "tenant-disconnect-failure"
+        root_config = TenantedApplicationRecord.tenanted_root_config
+        tenant_config = root_config.new_tenant_config(tenant)
+        handler = TenantedApplicationRecord.connection_handler
+        specification = TenantedApplicationRecord.connection_specification_name
+        failed_pool = nil
+        migration_tasks = ActiveRecord::Tenanted::DatabaseTasks.new(root_config)
+        migration_tasks.define_singleton_method(:migrate_tenant) do |_tenant_name|
+          raise "original tenant migration failure"
+        end
+        original_establish = handler.method(:establish_connection)
+        establish_connection = lambda do |*args, **options|
+          pool = original_establish.call(*args, **options)
+          if options[:shard].to_s == tenant
+            failed_pool = pool
+            pool.pool_config.define_singleton_method(:disconnect!) do
+              raise "injected pool disconnect failure"
+            end
+          end
+          pool
+        end
+
+        handler.stub :establish_connection, establish_connection do
+          ActiveRecord::Tenanted::DatabaseTasks.stub :new, ->(_config) { migration_tasks } do
+            error = assert_raises(RuntimeError) { TenantedApplicationRecord.create_tenant(tenant) }
+
+            assert_equal "original tenant migration failure", error.message
+            assert error.backtrace.any? { |line| line.include?("create_tenant") }
+            assert File.exist?(tenant_config.database)
+            assert_predicate failed_pool, :tenant_pool_retired?
+            assert_predicate failed_pool, :tenant_pool_failed?
+            assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ tenant, :writing ]
+            assert_nil handler.retrieve_connection_pool(specification, role: :writing, shard: tenant, strict: false)
+
+            assert_raises(ActiveRecord::PendingMigrationError) do
+              TenantedApplicationRecord.with_tenant(tenant) { User.count }
+            end
+            assert_nil handler.retrieve_connection_pool(specification, role: :writing, shard: tenant, strict: false)
+            assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ tenant, :writing ]
+          end
+        ensure
+          if failed_pool&.pool_config&.singleton_methods(false)&.include?(:disconnect!)
+            failed_pool.pool_config.singleton_class.remove_method(:disconnect!)
+          end
+          if handler.retrieve_connection_pool(specification, role: :writing, shard: tenant, strict: false)
+            handler.remove_connection_pool(specification, role: :writing, shard: tenant)
+          end
+          TenantedApplicationRecord.tenanted_connection_pools.delete_if_same([ tenant, :writing ], failed_pool) if failed_pool
+          tenant_config.config_adapter.drop_database if File.exist?(tenant_config.database)
+        end
+      end
+
+      test "concurrent tenant pool creation respects the max" do
+        root_config = TenantedApplicationRecord.tenanted_root_config
+        tenants = %w[tenant-first-c tenant-second-d]
+
+        root_config.stub :max_connection_pools, 2 do
+          TenantedApplicationRecord.create_tenant("tenant-first-a") { User.count }
+          TenantedApplicationRecord.create_tenant("tenant-second-b") { User.count }
+          tenants.each do |tenant|
+            tenant_config = root_config.new_tenant_config(tenant)
+            tenant_config.config_adapter.create_database
+            ActiveRecord::Tenanted::DatabaseTasks.new(root_config).migrate_tenant(tenant)
+          end
+
+          ready = Queue.new
+          start = Queue.new
+          errors = Concurrent::Array.new
+          handler = TenantedApplicationRecord.connection_handler
+          specification = TenantedApplicationRecord.connection_specification_name
+          observed_counts = Concurrent::Array.new
+          original_establish_connection = handler.method(:establish_connection)
+          establish_connection = lambda do |*args, **options|
+            pool = original_establish_connection.call(*args, **options)
+            if tenants.include?(options[:shard].to_s)
+              registered_count = (tenants + %w[tenant-first-a tenant-second-b]).count do |tenant|
+                handler.retrieve_connection_pool(specification, role: :writing, shard: tenant, strict: false)
+              end
+              observed_counts << registered_count
+            end
+            pool
+          end
+
+          threads = []
+          handler.stub :establish_connection, establish_connection do
+            threads = tenants.map do |tenant|
+              Thread.new do
+                ready << true
+                Timeout.timeout(5) { start.pop }
+                TenantedApplicationRecord.with_tenant(tenant, prohibit_shard_swapping: false) { User.count }
+              rescue StandardError => error
+                errors << error
+              end
+            end
+
+            begin
+              threads.length.times { Timeout.timeout(5) { ready.pop } }
+              threads.length.times { start << true }
+              threads.each { |thread| assert Timeout.timeout(5) { thread.join } }
+            ensure
+              threads.length.times { start << true }
+              threads.each do |thread|
+                thread.kill if thread.alive?
+                thread.join(5)
+              end
+            end
+          end
+
+          assert_empty errors
+          assert_equal tenants.size, observed_counts.size
+          assert_operator observed_counts.max, :<=, 2
+          handler = TenantedApplicationRecord.connection_handler
+          registered_tenants = tenants.map do |tenant|
+            handler.retrieve_connection_pool(
+              TenantedApplicationRecord.connection_specification_name,
+              role: :writing,
+              shard: tenant,
+              strict: false)
+          end
+          assert_equal tenants.sort, registered_tenants.compact.map(&:shard).sort
+          assert_equal 2, registered_tenants.compact.size
+        end
+      end
+
+      test "pool capacity is shared across connection roles" do
+        root_config = TenantedApplicationRecord.tenanted_root_config
+        tenant_a = "tenant-role-a"
+        tenant_b = "tenant-role-b"
+        specification = TenantedApplicationRecord.connection_specification_name
+
+        root_config.stub :max_connection_pools, 2 do
+          TenantedApplicationRecord.create_tenant(tenant_a) { User.count }
+          TenantedApplicationRecord.with_tenant(tenant_a) { User.connection_pool }
+          reader_pool = TenantedApplicationRecord.connected_to(role: :reading, shard: tenant_a) do
+            User.connection_pool
+          end
+          TenantedApplicationRecord.create_tenant(tenant_b) { User.count }
+
+          handler = TenantedApplicationRecord.connection_handler
+          registered_writer = handler.retrieve_connection_pool(specification, role: :writing, shard: tenant_a, strict: false)
+          registered_reader = handler.retrieve_connection_pool(specification, role: :reading, shard: tenant_a, strict: false)
+          registered_tenant_b = handler.retrieve_connection_pool(specification, role: :writing, shard: tenant_b, strict: false)
+
+          assert_same reader_pool, registered_reader
+          assert_nil registered_writer
+          assert_kind_of ActiveRecord::ConnectionAdapters::ConnectionPool, registered_tenant_b
+          assert_equal 2, [ registered_writer, registered_reader, registered_tenant_b ].compact.size
+        end
+      end
     end
 
     for_each_scenario do
@@ -1254,6 +1809,139 @@ describe ActiveRecord::Tenanted::Tenant do
         test "pending migrations should raise an error" do
           assert_raises(ActiveRecord::PendingMigrationError) do
             TenantedApplicationRecord.with_tenant("foo") { User.first }
+          end
+
+          handler = TenantedApplicationRecord.connection_handler
+          assert_nil handler.retrieve_connection_pool(
+            TenantedApplicationRecord.connection_specification_name,
+            role: :writing,
+            shard: "foo",
+            strict: false)
+          assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ "foo", :writing ]
+        end
+
+        test "pending migration cleanup removes a replacement pool behind a stale LRU entry" do
+          handler = TenantedApplicationRecord.connection_handler
+          specification = TenantedApplicationRecord.connection_specification_name
+          root_config = TenantedApplicationRecord.tenanted_root_config
+
+          replacement_pool = handler.establish_connection(
+            root_config.new_tenant_config("foo"),
+            owner_name: specification,
+            role: :writing,
+            shard: "foo")
+          assert_same replacement_pool, handler.retrieve_connection_pool(
+            specification,
+            role: :writing,
+            shard: "foo",
+            strict: false)
+
+          assert_raises(ActiveRecord::PendingMigrationError) do
+            TenantedApplicationRecord.with_tenant("foo") { User.first }
+          end
+
+          assert_nil handler.retrieve_connection_pool(
+            specification,
+            role: :writing,
+            shard: "foo",
+            strict: false)
+          assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ "foo", :writing ]
+        end
+
+        test "a concurrent lookup cannot lease a pool during failed schema validation" do
+          pool_published = Queue.new
+          continue_validation = Queue.new
+          peer_started = Queue.new
+          peer_at_creation_lock = Queue.new
+          peer_may_lookup = Queue.new
+          lookups = Queue.new
+          handler = TenantedApplicationRecord.connection_handler
+          creation_lock = TenantedApplicationRecord::CONNECTION_POOL_CREATION_LOCK
+          original_synchronize = creation_lock.method(:synchronize)
+          original_establish_connection = handler.method(:establish_connection)
+          peer_thread = nil
+          creator_blocked = false
+          creator_blocked_lock = Mutex.new
+          establish_connection = lambda do |*args, **options|
+            pool = original_establish_connection.call(*args, **options)
+            block_creator = options[:shard].to_s == "foo" && creator_blocked_lock.synchronize do
+              next false if creator_blocked
+
+              creator_blocked = true
+            end
+            if block_creator
+              pool_published << pool
+              Timeout.timeout(5) { continue_validation.pop }
+            end
+            pool
+          end
+          threads = []
+
+          handler.stub :establish_connection, establish_connection do
+            threads << Thread.new do
+              TenantedApplicationRecord.with_tenant("foo") do
+                TenantedApplicationRecord.connection_pool
+              end
+              lookups << :created
+            rescue StandardError => error
+              lookups << error
+            end
+
+            begin
+              failed_pool = Timeout.timeout(5) { pool_published.pop }
+              pool_config = failed_pool.pool_config
+              pool_specification = pool_config.connection_descriptor.name
+              assert_same failed_pool, handler.retrieve_connection_pool(
+                pool_specification,
+                role: pool_config.role,
+                shard: pool_config.shard,
+                strict: false)
+              assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ "foo", :writing ]
+
+              threads << Thread.new do
+                peer_started << true
+                Timeout.timeout(5) { peer_may_lookup.pop }
+                TenantedApplicationRecord.with_tenant("foo") do
+                  TenantedApplicationRecord.connection_pool
+                end
+                lookups << :leased
+              rescue StandardError => error
+                lookups << error
+              end
+              assert Timeout.timeout(5) { peer_started.pop }
+              peer_thread = threads.last
+              creation_lock.define_singleton_method(:synchronize) do |&block|
+                if Thread.current.equal?(peer_thread)
+                  lock_was_held = !creation_lock.try_lock
+                  creation_lock.unlock unless lock_was_held
+                  peer_at_creation_lock << lock_was_held
+                end
+                original_synchronize.call(&block)
+              end
+              peer_may_lookup << true
+              assert Timeout.timeout(5) { peer_at_creation_lock.pop }
+              assert_predicate lookups, :empty?, "the peer must remain behind the creator lock during schema validation"
+
+              continue_validation << true
+              threads.each { |thread| assert Timeout.timeout(5) { thread.join } }
+              lookup_results = [ lookups.pop, lookups.pop ]
+              assert_equal 2, lookup_results.count { |result| result.is_a?(ActiveRecord::PendingMigrationError) }
+              assert_not_includes lookup_results, :leased
+              assert_nil handler.retrieve_connection_pool(
+                pool_specification,
+                role: pool_config.role,
+                shard: pool_config.shard,
+                strict: false)
+              assert_not_includes TenantedApplicationRecord.tenanted_connection_pools.keys, [ "foo", :writing ]
+            ensure
+              continue_validation << true
+              peer_may_lookup << true
+              threads.each do |thread|
+                thread.kill if thread.alive?
+                thread.join(5)
+              end
+              creation_lock.singleton_class.remove_method(:synchronize) if creation_lock.singleton_methods(false).include?(:synchronize)
+            end
           end
         end
 

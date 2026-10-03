@@ -10,6 +10,7 @@ module ActiveRecord
 
         def initialize(...)
           super
+          max_connection_pools
           @test_worker_id = nil
           @config_adapter = nil
         end
@@ -58,7 +59,11 @@ module ActiveRecord
         end
 
         def max_connection_pools
-          (configuration_hash[:max_connection_pools] || DEFAULT_MAX_CONNECTION_POOLS).to_i
+          maximum = configuration_hash.fetch(:max_connection_pools, DEFAULT_MAX_CONNECTION_POOLS)
+          maximum = DEFAULT_MAX_CONNECTION_POOLS if maximum.nil?
+          return maximum if maximum.is_a?(Integer) && maximum.positive?
+
+          raise TenantConfigurationError, "max_connection_pools must be a positive integer"
         end
       end
     end

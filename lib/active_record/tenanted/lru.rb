@@ -18,6 +18,10 @@ module ActiveRecord
         end
       end
 
+      def peek(key)
+        @data[key]
+      end
+
       def []=(key, value)
         @data.delete key
         @data[key] = value
@@ -32,6 +36,17 @@ module ActiveRecord
         key, value = @data.first
         @data.delete(key)
         [ key, value ]
+      end
+
+      def snapshot
+        @data.to_a
+      end
+
+      def delete_if_same(key, value)
+        return false unless @data[key].equal?(value)
+
+        @data.delete(key)
+        true
       end
 
       def keys
