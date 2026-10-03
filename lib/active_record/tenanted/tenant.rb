@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "monitor"
+
 module ActiveRecord
   module Tenanted
     # instance methods common to both Tenant and Subtenant
@@ -187,6 +189,7 @@ module ActiveRecord
       end.new.freeze
 
       CONNECTION_POOL_CREATION_LOCK = Thread::Mutex.new # :nodoc:
+      POOL_REGISTRY_LOCK = Monitor.new # :nodoc:
 
       class_methods do
         def tenanted?
@@ -237,21 +240,32 @@ module ActiveRecord
           created_db = false
           base_config = tenanted_root_config
           adapter = base_config.new_tenant_config(tenant_name).config_adapter
+          pool = nil
 
           adapter.acquire_ready_lock do
             unless adapter.database_exist?
               adapter.create_database
 
               with_tenant(tenant_name) do
-                connection_pool(schema_version_check: false)
+                pool = connection_pool(schema_version_check: false)
                 ActiveRecord::Tenanted::DatabaseTasks.new(base_config).migrate_tenant(tenant_name)
               end
 
+              pool.tenant_pool_ready!
+              mark_tenant_pool_ready([ tenant_name.to_s, ActiveRecord.writing_role ], pool)
               created_db = true
             end
-          rescue
-            adapter.drop_database
-            raise
+          rescue StandardError => creation_error
+            begin
+              if cleanup_failed_tenant_creation(tenant_name)
+                adapter.drop_database
+              else
+                Rails.logger.error("Could not safely remove the database for an unsuccessful tenant creation")
+              end
+            rescue StandardError
+              Rails.logger.error("Failed to clean up an unsuccessful tenant creation")
+            end
+            raise creation_error
           end
 
           raise TenantExistsError unless created_db || if_not_exists
@@ -265,7 +279,11 @@ module ActiveRecord
           ActiveRecord::Base.logger.info "  DESTROY [tenant=#{tenant_name}] Destroying tenant database"
 
           with_tenant(tenant_name, prohibit_shard_swapping: false) do
-            if retrieve_connection_pool(strict: false)
+            if raw_tenant_connection_pool
+              pool = raw_tenant_connection_pool
+              POOL_REGISTRY_LOCK.synchronize do
+                tenanted_connection_pools.delete_if_same([ current_tenant, current_role ], pool)
+              end
               remove_connection
             end
           end
@@ -290,24 +308,44 @@ module ActiveRecord
         end
 
         def connection_pool(schema_version_check: true) # :nodoc:
-          if current_tenant
-            pool = retrieve_connection_pool(strict: false)
+          return Tenanted::UntenantedConnectionPool.new(tenanted_root_config, self) unless current_tenant
 
-            if pool.nil?
-              CONNECTION_POOL_CREATION_LOCK.synchronize do
-                # re-check now that we have the lock
-                pool = retrieve_connection_pool(strict: false)
+          pool_key = [ current_tenant, current_role ]
+          pool = raw_tenant_connection_pool
+          return pool if pool && ready_tenant_pool?(pool_key, pool)
 
-                if pool.nil?
-                  _create_tenanted_pool(schema_version_check: schema_version_check)
-                  pool = retrieve_connection_pool(strict: true)
+          CONNECTION_POOL_CREATION_LOCK.synchronize do
+            pool = raw_tenant_connection_pool
+            return pool if pool && ready_tenant_pool?(pool_key, pool)
+            if pool && !pool.tenant_pool_available_to_current_context?
+              raise ActiveRecord::ConnectionNotEstablished, "tenant connection pool is not ready"
+            end
+            discard_stale_tenant_pool(pool_key)
+
+            begin
+              if pool
+                return pool unless pool.tenant_pool_ready?
+
+                ensure_tenant_pool_capacity!(already_registered: true)
+                validate_tenant_pool_schema!(pool) if schema_version_check
+              else
+                ensure_tenant_pool_capacity!
+                pool = _create_tenanted_pool(schema_version_check:)
+              end
+
+              mark_tenant_pool_ready(pool_key, pool) if pool.tenant_pool_ready?
+              pool
+            rescue StandardError
+              failed_pool = pool || raw_tenant_connection_pool
+              if failed_pool
+                begin
+                  cleanup_failed_tenant_pool(pool_key, failed_pool)
+                rescue StandardError
+                  Rails.logger.error("Failed to clean up a tenant connection pool after validation failed")
                 end
               end
+              raise
             end
-
-            pool
-          else
-            Tenanted::UntenantedConnectionPool.new(tenanted_root_config, self)
           end
         end
 
@@ -319,41 +357,157 @@ module ActiveRecord
           # ensure all classes use the same connection pool
           return superclass._create_tenanted_pool unless connection_class?
 
+          previous_provisional_state = ActiveSupport::IsolatedExecutionState[:active_record_tenanted_provisional_pool]
           tenant = current_tenant
           db_config = tenanted_root_config.new_tenant_config(tenant)
 
           unless db_config.config_adapter.database_exist?
             raise TenantDoesNotExistError, "The database for tenant #{tenant.inspect} does not exist."
           end
+          ActiveSupport::IsolatedExecutionState[:active_record_tenanted_provisional_pool] = !schema_version_check
           pool = establish_connection(db_config)
+          ActiveSupport::IsolatedExecutionState[:active_record_tenanted_provisional_pool] = previous_provisional_state
 
-          if schema_version_check
-            pending_migrations = pool.migration_context.open.pending_migrations
-            raise ActiveRecord::PendingMigrationError.new(pending_migrations: pending_migrations) if pending_migrations.any?
-          end
+          validate_tenant_pool_schema!(pool) if schema_version_check
 
           pool
+        ensure
+          ActiveSupport::IsolatedExecutionState[:active_record_tenanted_provisional_pool] = previous_provisional_state if defined?(previous_provisional_state)
         end
 
         private
-          def retrieve_connection_pool(strict:)
-            role = current_role
-            shard = current_tenant
-            connection_handler.retrieve_connection_pool(connection_specification_name, role:, shard:, strict:).tap do |pool|
-              if pool
-                tenanted_connection_pools[[ shard, role ]] = pool
-                reap_connection_pools
+          def raw_tenant_connection_pool(shard: current_tenant, role: current_role)
+            connection_handler.retrieve_connection_pool(
+              connection_specification_name,
+              role:,
+              shard:,
+              strict: false)
+          end
+
+          def ready_tenant_pool?(pool_key, pool)
+            POOL_REGISTRY_LOCK.synchronize do
+              current = tenanted_connection_pools.peek(pool_key)
+              if current.equal?(pool) && !pool.tenant_pool_retired? && !pool.tenant_pool_failed?
+                tenanted_connection_pools[pool_key]
+                true
+              else
+                false
               end
             end
           end
 
-          def reap_connection_pools
-            while tenanted_connection_pools.size > tenanted_root_config.max_connection_pools
-              info, _ = *tenanted_connection_pools.pop
-              shard, role = *info
+          def mark_tenant_pool_ready(pool_key, pool)
+            POOL_REGISTRY_LOCK.synchronize do
+              tenanted_connection_pools[pool_key] = pool
+            end
+          end
 
-              connection_handler.remove_connection_pool(connection_specification_name, role:, shard:)
-              Rails.logger.info "  REAPED [tenant=#{shard} role=#{role}] Tenanted connection pool reaped to limit total connection pools"
+          def validate_tenant_pool_schema!(pool)
+            pending_migrations = pool.migration_context.open.pending_migrations
+            raise ActiveRecord::PendingMigrationError.new(pending_migrations:) if pending_migrations.any?
+          end
+
+          def registered_tenant_pool_configs
+            manager = connection_handler.send(:get_pool_manager, connection_specification_name)
+            return [] unless manager
+
+            manager.pool_configs.select do |pool_config|
+              pool_config.db_config.is_a?(ActiveRecord::Tenanted::DatabaseConfigurations::TenantConfig)
+            end
+          end
+
+          def ensure_tenant_pool_capacity!(already_registered: false)
+            capacity = tenanted_root_config.max_connection_pools
+            target_size = capacity - (already_registered ? 0 : 1)
+            return if registered_tenant_pool_configs.size <= target_size
+
+            pool_snapshot = POOL_REGISTRY_LOCK.synchronize { tenanted_connection_pools.snapshot }
+
+            pool_snapshot.each do |pool_key, pool|
+              break if registered_tenant_pool_configs.size <= target_size
+
+              unless raw_pool_for_key(pool_key).equal?(pool)
+                POOL_REGISTRY_LOCK.synchronize { tenanted_connection_pools.delete_if_same(pool_key, pool) }
+                next
+              end
+
+              retire_tenant_pool(pool_key, pool, require_ready: true)
+            end
+
+            if registered_tenant_pool_configs.size > target_size
+              raise ConnectionPoolCapacityError, "All tenant connection pools are busy"
+            end
+          end
+
+          def raw_pool_for_key(pool_key)
+            shard, role = pool_key
+            raw_tenant_connection_pool(shard:, role:)
+          end
+
+          def discard_stale_tenant_pool(pool_key)
+            stale_pool = POOL_REGISTRY_LOCK.synchronize { tenanted_connection_pools.peek(pool_key) }
+            return unless stale_pool
+            return if raw_pool_for_key(pool_key).equal?(stale_pool)
+
+            POOL_REGISTRY_LOCK.synchronize { tenanted_connection_pools.delete_if_same(pool_key, stale_pool) }
+          end
+
+          def cleanup_failed_tenant_pool(pool_key, pool)
+            retired = retire_tenant_pool(pool_key, pool, require_ready: false)
+            unless retired
+              pool.tenant_pool_failed!
+              POOL_REGISTRY_LOCK.synchronize { tenanted_connection_pools.delete_if_same(pool_key, pool) }
+            end
+            retired
+          rescue StandardError
+            pool.tenant_pool_failed!
+            POOL_REGISTRY_LOCK.synchronize { tenanted_connection_pools.delete_if_same(pool_key, pool) }
+            raise
+          end
+
+          def cleanup_failed_tenant_creation(tenant_name)
+            pool_key = [ tenant_name.to_s, ActiveRecord.writing_role ]
+            CONNECTION_POOL_CREATION_LOCK.synchronize do
+              pool = raw_pool_for_key(pool_key)
+              return true unless pool
+
+              cleanup_failed_tenant_pool(pool_key, pool)
+            end
+          end
+
+          def retire_tenant_pool(pool_key, pool, require_ready:)
+            pool_config = pool.pool_config
+            return false unless pool_config.mon_try_enter
+
+            begin
+              pool.try_with_retirement_barriers do
+                next false unless pool.tenant_pool_idle?
+                next false unless raw_pool_for_key(pool_key).equal?(pool)
+
+                removed = POOL_REGISTRY_LOCK.synchronize do
+                  registered = tenanted_connection_pools.peek(pool_key)
+                  if registered.nil? && !require_ready
+                    true
+                  elsif registered.equal?(pool)
+                    tenanted_connection_pools.delete_if_same(pool_key, pool)
+                  else
+                    false
+                  end
+                end
+                next false unless removed
+
+                begin
+                  shard, role = pool_key
+                  connection_handler.remove_connection_pool(connection_specification_name, role:, shard:)
+                  Rails.logger.info "  REAPED [tenant=#{shard} role=#{role}] Tenanted connection pool reaped to limit total connection pools"
+                ensure
+                  POOL_REGISTRY_LOCK.synchronize { pool.retire_tenant_pool! }
+                end
+
+                true
+              end
+            ensure
+              pool_config.mon_exit
             end
           end
 

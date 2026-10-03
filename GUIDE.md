@@ -287,7 +287,17 @@ production:
     max_connection_pools: 20
 ```
 
-Active Record Tenanted will reap the least-recently-used connection pools when this limit is surpassed. Developers are encouraged to tune this parameter with care, since setting it too low may lead to increased request latency due to frequently re-establishing database connections, while setting it too high may consume precious file descriptors and memory resources.
+When the limit is reached, Active Record Tenanted retires the least-recently-used idle tenant pool to make room. It keeps pools with checked-out connections alive. If every pool is busy, pool creation raises `ActiveRecord::Tenanted::ConnectionPoolCapacityError`; retry after a tenant connection has been returned to its pool.
+
+The limit counts registered tenant pool configurations for the tenant connection class across all roles and shards, including pools that have not finished initialization. During eviction the gem checks the exact registered pool and acquires Rails' pool-configuration monitor, reaper lock, and pool monitor in that order without waiting. It skips a pool if a lock is busy or the pool has an outstanding checkout, adapter creation, maintenance operation, pin, or in-use connection. The locks remain held through handler removal and disconnect so Rails' own disconnect checkouts can finish before stale references are fenced. Ordinary checkout and adapter creation do not hold the pool monitor while doing adapter work.
+
+Pool creation uses Rails' lazy `PoolConfig#pool` factory so the tenant-aware pool is installed before its first caller receives it. That factory and the disconnect locks are Rails internal APIs; the implementation is verified with the declared minimum Rails 8.1.2.1, current Rails 8.1.4, and the tested Rails edge revision. Check the compatibility appraisals before changing that integration.
+
+If tenant creation fails and Rails cannot safely detach its provisional pool, the pool is fenced from checkout and its database file is retained. Any handler configuration still registered for that pool counts against the limit until it can be safely removed or the application process restarts; reconcile the incomplete tenant database before retrying creation.
+
+The configured value must be a positive integer. Omitting the setting or setting it to `nil` uses the default of 50; zero, negative values, strings, floats, and booleans raise `ActiveRecord::Tenanted::TenantConfigurationError` when the database configuration loads.
+
+Developers are encouraged to tune this parameter with care, since setting it too low may lead to increased request latency due to frequently re-establishing database connections, while setting it too high may consume precious file descriptors and memory resources.
 
 
 ### 2.4 Configuring the Connection Class
