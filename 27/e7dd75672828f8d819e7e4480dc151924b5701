@@ -1,0 +1,33 @@
+CHANGELOG.md
+  s_c8ecb2a9cf2c3a::t_b7dcf675621b08 11
+lib/active_record/tenanted/database_adapters/sqlite.rb
+  s_997fa239b4e074::t_51192b78673495 26-31,63-64
+test/unit/database_configurations_test.rb
+  s_c8ecb2a9cf2c3a::t_ed1ec4306bb6aa 60-64
+test/unit/tenant_name_traversal_test.rb
+  s_c8ecb2a9cf2c3a::t_6b9c541f6d5822 52,116-136,140-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "27e7dd75672828f8d819e7e4480dc151924b5701",
+  "prompts": {},
+  "sessions": {
+    "s_997fa239b4e074": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e63b1a05-145a-4909-901d-dcfc79141cd2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jeremy Daer <jeremydaer@gmail.com>"
+    },
+    "s_c8ecb2a9cf2c3a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ecceba0b-b8c3-41b6-89cd-16be89dcf9c8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jeremy Daer <jeremydaer@gmail.com>"
+    }
+  }
+}
