@@ -11,7 +11,9 @@ module ActiveRecord
             end
 
             # The tenant is read from the connection context, which Rails' own `connected_to` can
-            # set without going through this gem's tenant API, so the name is checked here too.
+            # set without going through this gem's tenant API, so the name is checked here too. A
+            # shard set that way may be a Symbol or an Integer.
+            tenant = tenant.to_s
             klass.tenanted_root_config.config_adapter.validate_tenant_name(tenant)
 
             sprintf(@root, tenant: tenant)

@@ -26,6 +26,16 @@ describe ActiveRecord::Tenanted::Storage do
               end
             end
           end
+
+          [ [ "a Symbol", :foo, "foo" ], [ "an Integer", 42, "42" ] ].each do |description, shard, name|
+            test "returns the tenant set by connected_to with #{description} shard" do
+              ActiveRecord::Tenanted.stub(:connection_class, TenantedApplicationRecord) do
+                TenantedApplicationRecord.connected_to(shard: shard, role: ActiveRecord.writing_role) do
+                  assert_equal("/path/to/#{name}/storage", service.root)
+                end
+              end
+            end
+          end
         end
 
         describe "with a non-tenanted root path" do
