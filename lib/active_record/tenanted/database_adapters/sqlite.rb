@@ -23,11 +23,12 @@ module ActiveRecord
 
         # A tenant name is interpolated into the database path as a single path segment, and that
         # path may be a URI (see #path_for), so a name is limited to the RFC 3986 unreserved
-        # characters and may not begin with a dot. A leading dot either traverses out of the tenant
-        # directory or hides the database from the glob in #tenant_databases; "%" is percent-decoded
-        # by SQLite when it opens a URI filename; "?" and "#" truncate the path; and other
-        # punctuation is either reserved in a URI or makes URI.parse raise.
-        TENANT_NAME_PATTERN = /\A[A-Za-z0-9_~-][A-Za-z0-9._~-]*\z/
+        # characters and may not begin with a dot or a tilde. A leading dot either traverses out of
+        # the tenant directory or hides the database from the glob in #tenant_databases; a leading
+        # tilde is expanded by File.expand_path when the name begins a relative path; "%" is
+        # percent-decoded by SQLite when it opens a URI filename; "?" and "#" truncate the path; and
+        # other punctuation is either reserved in a URI or makes URI.parse raise.
+        TENANT_NAME_PATTERN = /\A[A-Za-z0-9_-][A-Za-z0-9._~-]*\z/
 
         def tenant_databases
           glob = path_for(db_config.database_pattern_for("*"))
@@ -59,8 +60,8 @@ module ActiveRecord
         def validate_tenant_name(tenant_name)
           unless valid_tenant_name?(tenant_name)
             raise BadTenantNameError,
-                  "Tenant name may not begin with a dot, and may contain only letters, digits, " \
-                  "and the characters '-', '.', '_' and '~': #{tenant_name.inspect}"
+                  "Tenant name may not begin with a dot or a tilde, and may contain only letters, " \
+                  "digits, and the characters '-', '.', '_' and '~': #{tenant_name.inspect}"
           end
         end
 

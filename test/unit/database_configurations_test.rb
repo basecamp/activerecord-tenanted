@@ -57,6 +57,11 @@ describe ActiveRecord::Tenanted::DatabaseConfigurations do
             assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for(".hidden") }
           end
 
+          test "raises if the tenant name begins with a tilde" do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("~") }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("~root") }
+          end
+
           test "raises if the tenant name contains a character that is special in a URI" do
             assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo%2ebar") }
             assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for("foo?bar") }

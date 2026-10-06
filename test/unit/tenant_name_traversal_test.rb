@@ -49,6 +49,7 @@ describe "tenant name path traversal" do
     [ "a multi-segment traversal",  "../.." ],
     [ "an empty name",              "" ],
     [ "a hidden directory",         ".hidden" ],
+    [ "a leading tilde",            "~" ],
     [ "a percent-escaped traversal", "%2e%2e" ],
     [ "a URI query separator",      "foo?bar" ],
     [ "a URI fragment separator",   "foo#bar" ],
@@ -112,9 +113,42 @@ describe "tenant name path traversal" do
     end
   end
 
+  describe "a relative database template that begins with the tenant name" do
+    let(:config) do
+      ActiveRecord::Tenanted::DatabaseConfigurations::BaseConfig.new(
+        "test",
+        "test_tenant",
+        { adapter: "sqlite3", database: "%{tenant}/main.sqlite3" }
+      )
+    end
+
+    [ "~", "~root" ].each do |tenant_name|
+      test "refuses #{tenant_name.inspect}" do
+        assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.database_for(tenant_name) }
+        assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { config.new_tenant_config(tenant_name) }
+      end
+    end
+
+    test "accepts a tilde after the first character" do
+      assert_nothing_raised { config.database_for("a~b") }
+    end
+  end
+
   describe "Active Storage" do
     with_active_storage do
       let(:service) { ActiveStorage::Service::DiskService.new(root: "/path/to/tenants/%{tenant}/storage") }
+      let(:relative_service) { ActiveStorage::Service::DiskService.new(root: "%{tenant}/storage") }
+
+      test "a leading tilde never reaches a relative disk service root" do
+        ActiveRecord::Tenanted.stub(:connection_class, TenantedApplicationRecord) do
+          TenantedApplicationRecord.connected_to(shard: "~", role: ActiveRecord.writing_role) do
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) { relative_service.root }
+            assert_raises(ActiveRecord::Tenanted::BadTenantNameError) do
+              relative_service.path_for("abcdef123456")
+            end
+          end
+        end
+      end
 
       test "a traversing tenant never reaches the disk service root" do
         ActiveRecord::Tenanted.stub(:connection_class, TenantedApplicationRecord) do

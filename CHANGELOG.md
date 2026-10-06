@@ -8,7 +8,7 @@
 
 ### Breaking change: tenant names
 
-A tenant name may now contain only the RFC 3986 unreserved characters, which are letters, digits, `-`, `.`, `_`, and `~`, and may not begin with a dot. `create_tenant`, `destroy_tenant`, `with_tenant`, and `current_tenant=` raise `BadTenantNameError` for any other name, so a name is checked as the tenant context is set and not only when a database path is built. The Active Storage disk service checks the name again, because Rails' own `connected_to` can set the context without passing through this gem. `tenant_exist?` returns `false` for such a name instead of raising, so a request that resolves to an invalid tenant is a 404 as it was before.
+A tenant name may now contain only the RFC 3986 unreserved characters, which are letters, digits, `-`, `.`, `_`, and `~`, and may not begin with a dot or a tilde. `create_tenant`, `destroy_tenant`, `with_tenant`, and `current_tenant=` raise `BadTenantNameError` for any other name, so a name is checked as the tenant context is set and not only when a database path is built. The Active Storage disk service checks the name again, because Rails' own `connected_to` can set the context without passing through this gem. `tenant_exist?` returns `false` for such a name instead of raising, so a request that resolves to an invalid tenant is a 404 as it was before.
 
 An existing database whose directory name is no longer valid is skipped by `tenants` and `with_each_tenant`, and a warning is logged naming the file. Rename those directories before upgrading. @flavorjones
 
