@@ -1,0 +1,21 @@
+lib/active_record/tenanted/storage.rb
+  s_c8ecb2a9cf2c3a::t_bf03057558c2e1 14-16
+test/unit/storage_test.rb
+  s_c8ecb2a9cf2c3a::t_2d4c8853c832ca 29-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f56d0667c3914fb58baedc1451e358da939bfeb4",
+  "prompts": {},
+  "sessions": {
+    "s_c8ecb2a9cf2c3a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ecceba0b-b8c3-41b6-89cd-16be89dcf9c8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Jeremy Daer <jeremydaer@gmail.com>"
+    }
+  }
+}
