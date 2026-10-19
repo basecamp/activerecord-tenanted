@@ -27,7 +27,13 @@ module ActiveRecord
 
           config_adapter.validate_tenant_name(tenant_name)
 
-          db = sprintf(database, tenant: tenant_name)
+          database_pattern_for(tenant_name)
+        end
+
+        # Interpolates a glob or a regular expression into the database path. The pattern is not a
+        # tenant name and is not validated as one.
+        def database_pattern_for(pattern) # :nodoc:
+          db = sprintf(database, tenant: pattern)
 
           if test_worker_id
             db = config_adapter.test_workerize(db, test_worker_id)
@@ -41,10 +47,12 @@ module ActiveRecord
         end
 
         def new_tenant_config(tenant_name)
+          database = database_for(tenant_name) # validates the tenant name before it is used below
+
           config_name = "#{name}_#{tenant_name}"
           config_hash = configuration_hash.dup.tap do |hash|
             hash[:tenant] = tenant_name
-            hash[:database] = database_for(tenant_name)
+            hash[:database] = database
             hash[:tenanted_config_name] = name
           end
           Tenanted::DatabaseConfigurations::TenantConfig.new(env_name, config_name, config_hash)

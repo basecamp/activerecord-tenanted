@@ -6,7 +6,7 @@ module ActiveRecord
       #
       #  TODO: This still feels to me like it's not _quite_ right. I think we could further refactor this by:
       #
-      #  1. Moving tenant_databases and validate_tenant_name to BaseConfig, and subclassing it for
+      #  1. Moving tenant_databases and valid_tenant_name? to BaseConfig, and subclassing it for
       #     each database
       #  2. Moving create_database, drop_database, database_exist?, database_ready?,
       #     acquire_ready_lock, ensure_database_directory_exists, and database_path to the SQLite
@@ -14,30 +14,41 @@ module ActiveRecord
       #  3. Moving test_workerize and path_for to be SQLite connection adapter class methods,
       #     possibly into Rails
       #
-      class SQLite
-        attr_reader :db_config
-
-        def initialize(db_config)
-          @db_config = db_config
-        end
+      class SQLite < Base
+        # A tenant name is interpolated into the database path as a single path segment, and that
+        # path may be a URI (see #path_for), so a name is limited to the RFC 3986 unreserved
+        # characters and may not begin with a dot or a tilde. A leading dot either traverses out of
+        # the tenant directory or hides the database from the glob in #tenant_databases; a leading
+        # tilde is expanded by File.expand_path when the name begins a relative path; "%" is
+        # percent-decoded by SQLite when it opens a URI filename; "?" and "#" truncate the path; and
+        # other punctuation is either reserved in a URI or makes URI.parse raise.
+        TENANT_NAME_PATTERN = /\A[A-Za-z0-9_-][A-Za-z0-9._~-]*\z/
 
         def tenant_databases
-          glob = path_for(db_config.database_for("*"))
-          scanner = Regexp.new(path_for(db_config.database_for("(.+)")))
+          glob = path_for(db_config.database_pattern_for("*"))
+          scanner = Regexp.new(path_for(db_config.database_pattern_for("(.+)")))
 
           Dir.glob(glob).filter_map do |path|
             result = path.scan(scanner).flatten.first
+
             if result.nil?
               Rails.logger.warn "ActiveRecord::Tenanted: Cannot parse tenant name from filename #{path.inspect}"
+              next
             end
+
+            unless valid_tenant_name?(result)
+              Rails.logger.warn "ActiveRecord::Tenanted: Skipping database with an invalid tenant name #{result.inspect} in #{path.inspect}"
+              next
+            end
+
             result
           end
         end
 
-        def validate_tenant_name(tenant_name)
-          if tenant_name.match?(%r{[/'"`]})
-            raise BadTenantNameError, "Tenant name contains an invalid character: #{tenant_name.inspect}"
-          end
+        def valid_tenant_name?(tenant_name)
+          tenant_name.encoding.ascii_compatible? &&
+            tenant_name.valid_encoding? &&
+            TENANT_NAME_PATTERN.match?(tenant_name)
         end
 
         def create_database

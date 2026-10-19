@@ -205,7 +205,7 @@ module ActiveRecord
           when UNTENANTED_SENTINEL
             # no-op
           else
-            tenant_name = tenant_name.to_s
+            tenant_name = validated_tenant_name(tenant_name)
           end
 
           run_callbacks :set_current_tenant do
@@ -214,11 +214,14 @@ module ActiveRecord
         end
 
         def tenant_exist?(tenant_name)
-          tenanted_root_config.new_tenant_config(tenant_name).config_adapter.database_ready?
+          root_config = tenanted_root_config
+          return false unless root_config.config_adapter.valid_tenant_name?(tenant_name.to_s)
+
+          root_config.new_tenant_config(tenant_name).config_adapter.database_ready?
         end
 
         def with_tenant(tenant_name, prohibit_shard_swapping: true, &block)
-          tenant_name = tenant_name.to_s unless tenant_name == UNTENANTED_SENTINEL
+          tenant_name = validated_tenant_name(tenant_name) unless tenant_name == UNTENANTED_SENTINEL
 
           if tenant_name == current_tenant
             run_callbacks :with_tenant, &block
@@ -262,6 +265,8 @@ module ActiveRecord
         end
 
         def destroy_tenant(tenant_name)
+          tenant_name = validated_tenant_name(tenant_name)
+
           ActiveRecord::Base.logger.info "  DESTROY [tenant=#{tenant_name}] Destroying tenant database"
 
           with_tenant(tenant_name, prohibit_shard_swapping: false) do
@@ -336,6 +341,15 @@ module ActiveRecord
         end
 
         private
+          # A tenant name reaches the filesystem through the Active Storage disk service as well as
+          # through the database path, and the disk service reads it from the tenant context rather
+          # than from a database configuration. Validate it as the context is set.
+          def validated_tenant_name(tenant_name)
+            tenant_name = tenant_name.to_s
+            tenanted_root_config.config_adapter.validate_tenant_name(tenant_name)
+            tenant_name
+          end
+
           def retrieve_connection_pool(strict:)
             role = current_role
             shard = current_tenant
