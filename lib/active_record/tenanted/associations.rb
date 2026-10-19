@@ -11,7 +11,7 @@ module ActiveRecord
     module Associations # :nodoc:
       # Every query built on behalf of an association funnels through here, including the ones
       # issued by a collection proxy that has outlived the tenant context it was created in.
-      def scope
+      def scope(...)
         ensure_owner_tenant_context_safety
         super
       end
