@@ -2,6 +2,8 @@
 
 ## next / unreleased
 
+## v0.9.0 / 2026-10-19
+
 ### Security
 
 - Tenant names are now validated against an allowlist, closing a path traversal. A name like `..` or, under a URI database template, `%2e%2e`, resolved to a database path outside the per-tenant directory, so an application that passed an untrusted string to `create_tenant` or `destroy_tenant` created, migrated, or deleted a database there. See https://github.com/basecamp/activerecord-tenanted/security/advisories/GHSA-598c-gg29-6wvh for more information. @flavorjones
