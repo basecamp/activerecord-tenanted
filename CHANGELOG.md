@@ -1,5 +1,12 @@
 # `activerecord-tenanted` Changelog
 
+## next / unreleased
+
+### Fixed
+
+- Association reads no longer raise `ArgumentError` on Rails edge, which since [rails/rails#59120](https://github.com/rails/rails/pull/59120) passes an argument to `Association#scope`. @flavorjones
+
+
 ## v0.8.0 / 2026-08-04
 
 ### Breaking change: serialized payloads carry the tenant
