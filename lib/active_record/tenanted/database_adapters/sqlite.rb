@@ -6,7 +6,7 @@ module ActiveRecord
       #
       #  TODO: This still feels to me like it's not _quite_ right. I think we could further refactor this by:
       #
-      #  1. Moving tenant_databases and validate_tenant_name to BaseConfig, and subclassing it for
+      #  1. Moving tenant_databases and valid_tenant_name? to BaseConfig, and subclassing it for
       #     each database
       #  2. Moving create_database, drop_database, database_exist?, database_ready?,
       #     acquire_ready_lock, ensure_database_directory_exists, and database_path to the SQLite
@@ -14,13 +14,7 @@ module ActiveRecord
       #  3. Moving test_workerize and path_for to be SQLite connection adapter class methods,
       #     possibly into Rails
       #
-      class SQLite
-        attr_reader :db_config
-
-        def initialize(db_config)
-          @db_config = db_config
-        end
-
+      class SQLite < Base
         # A tenant name is interpolated into the database path as a single path segment, and that
         # path may be a URI (see #path_for), so a name is limited to the RFC 3986 unreserved
         # characters and may not begin with a dot or a tilde. A leading dot either traverses out of
@@ -55,14 +49,6 @@ module ActiveRecord
           tenant_name.encoding.ascii_compatible? &&
             tenant_name.valid_encoding? &&
             TENANT_NAME_PATTERN.match?(tenant_name)
-        end
-
-        def validate_tenant_name(tenant_name)
-          unless valid_tenant_name?(tenant_name)
-            raise BadTenantNameError,
-                  "Tenant name may not begin with a dot or a tilde, and may contain only letters, " \
-                  "digits, and the characters '-', '.', '_' and '~': #{tenant_name.inspect}"
-          end
         end
 
         def create_database
