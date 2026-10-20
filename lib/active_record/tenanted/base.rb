@@ -34,6 +34,41 @@ module ActiveRecord
           false
         end
 
+        def belongs_to(name, scope = nil, **options)
+          tenant_key = options.delete(:tenant_key)
+          super(name, scope, **options)
+
+          if tenant_key
+            define_method("#{name}=") do |value|
+              super(value)
+              if value.respond_to?(:tenant)
+                self.send("#{tenant_key}=", value.tenant)
+              end
+            end
+
+            unless tenanted?
+              define_method(name) do
+                tenant_value = send(tenant_key)
+                return nil unless tenant_value
+                target_klass = self.class.reflect_on_association(name).klass
+                if target_klass.tenanted?
+                  tenant_klass = if target_klass.respond_to?(:with_tenant)
+                    target_klass
+                  else
+                    target_klass.tenanted_subtenant_of
+                  end
+
+                  tenant_klass.prohibit_shard_swapping(false) do
+                    tenant_klass.with_tenant(tenant_value) { super() }
+                  end
+                else
+                  super()
+                end
+              end
+            end
+          end
+        end
+
         def table_exists?
           super
         rescue ActiveRecord::Tenanted::NoTenantError
