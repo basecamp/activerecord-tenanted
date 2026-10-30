@@ -12,8 +12,8 @@ group :development, :test do
   gem "minitest", "6.0.6"
   gem "minitest-mock", "5.27.0"
   gem "minitest-parallel_fork", "2.1.1", require: false
-  gem "msgpack", "1.8.5"
-  gem "sqlite3", "2.10.0"
+  gem "msgpack", "1.8.6"
+  gem "sqlite3", "2.10.2"
 end
 
 group :rubocop do
