@@ -2,6 +2,10 @@
 
 ## next / unreleased
 
+### Fixed
+
+- `destroy_tenant` closes the connection pool of every destroyed tenant. It used Rails' `remove_connection`, which resets `connection_specification_name` to nil, so from the second `destroy_tenant` in a process on the pool stayed open on the deleted database, and a tenant created again under that name reused it.
+
 ## v0.9.0 / 2026-10-19
 
 ### Security

@@ -1048,6 +1048,22 @@ describe ActiveRecord::Tenanted::Tenant do
           assert_nil(pool)
         end
 
+        test "it deletes the connection pool of every destroyed tenant" do
+          connection_name = TenantedApplicationRecord.connection_specification_name
+          TenantedApplicationRecord.create_tenant("bar")
+
+          TenantedApplicationRecord.destroy_tenant("foo")
+          TenantedApplicationRecord.destroy_tenant("bar")
+
+          pool = TenantedApplicationRecord.connection_handler.retrieve_connection_pool(
+            connection_name,
+            role: TenantedApplicationRecord.current_role,
+            shard: "bar",
+            strict: false)
+
+          assert_nil(pool)
+        end
+
         test "it logs the deletion" do
           log = capture_log do
             TenantedApplicationRecord.destroy_tenant("foo")

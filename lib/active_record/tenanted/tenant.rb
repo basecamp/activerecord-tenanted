@@ -270,8 +270,10 @@ module ActiveRecord
           ActiveRecord::Base.logger.info "  DESTROY [tenant=#{tenant_name}] Destroying tenant database"
 
           with_tenant(tenant_name, prohibit_shard_swapping: false) do
+            # Not `remove_connection`: it resets `connection_specification_name` to nil, so the
+            # next destroy_tenant would look the pool up under the wrong name and leave it open.
             if retrieve_connection_pool(strict: false)
-              remove_connection
+              connection_handler.remove_connection_pool(connection_specification_name, role: current_role, shard: current_shard)
             end
           end
 
