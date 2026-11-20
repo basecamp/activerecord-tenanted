@@ -2,6 +2,10 @@
 
 ## next / unreleased
 
+### Fixed
+
+- A tenant whose creation was killed while its schema was loading is repaired by `db:migrate` again, even after something has opened the tenant. The pending-migration check that runs when a tenant's connection pool is created no longer creates an empty `schema_migrations` table, which had made `db:migrate` skip the schema load and run every migration over the half-loaded tables. @cole-robertson
+
 ## v0.9.0 / 2026-10-19
 
 ### Security

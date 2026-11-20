@@ -88,6 +88,32 @@ describe ActiveRecord::Tenanted::DatabaseTasks do
         end
       end
 
+      describe "when a schema load was interrupted and the tenant was then opened" do
+        setup do
+          with_schema_dump_file
+
+          # A process killed while loading the schema leaves some tables and no schema_migrations.
+          config = base_config.new_tenant_config("foo")
+          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(config) do |conn|
+            conn.create_table(:users)
+          end
+
+          assert_raises(ActiveRecord::PendingMigrationError) do
+            TenantedApplicationRecord.with_tenant("foo") { User.first }
+          end
+        end
+
+        test "the schema is loaded" do
+          ActiveRecord::Tenanted::DatabaseTasks.new(base_config).migrate_tenant("foo")
+
+          config = base_config.new_tenant_config("foo")
+          ActiveRecord::Tasks::DatabaseTasks.with_temporary_connection(config) do |conn|
+            assert_equal(20250203191115, conn.pool.migration_context.current_version)
+            assert_includes(conn.columns(:users).map(&:name), "email")
+          end
+        end
+      end
+
       describe "when an outdated schema cache dump file exists" do
         setup { with_schema_cache_dump_file }
         setup { with_new_migration_file }

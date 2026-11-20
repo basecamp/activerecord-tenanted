@@ -333,7 +333,11 @@ module ActiveRecord
           pool = establish_connection(db_config)
 
           if schema_version_check
-            pending_migrations = pool.migration_context.open.pending_migrations
+            # Not `migration_context.open`: building a Migrator creates an empty schema_migrations
+            # table, and then a database whose schema was never loaded looks initialized to `migrate`.
+            migration_context = pool.migration_context
+            migrated = migration_context.get_all_versions
+            pending_migrations = migration_context.migrations.reject { |m| migrated.include?(m.version) }
             raise ActiveRecord::PendingMigrationError.new(pending_migrations: pending_migrations) if pending_migrations.any?
           end
 
