@@ -1166,6 +1166,219 @@ describe ActiveRecord::Tenanted::Tenant do
   end
 
   describe "connection pools" do
+    for_each_scenario do
+      test "a pool that a thread is using is not reaped, and the oldest idle pool is reaped instead" do
+        base_config.stub(:max_connection_pools, 2) do
+          TenantedApplicationRecord.create_tenant("one") { User.count }
+          TenantedApplicationRecord.create_tenant("two") { User.count }
+
+          in_transaction = Queue.new
+          finish = Queue.new
+          busy = Thread.new do
+            TenantedApplicationRecord.with_tenant("one") do
+              User.transaction do
+                User.create!(email: "first@example.org")
+                in_transaction << true
+                finish.pop
+                User.create!(email: "second@example.org")
+              end
+            end
+          end
+          in_transaction.pop
+          TenantedApplicationRecord.with_tenant("two") { User.count } # so "one" is the oldest
+
+          TenantedApplicationRecord.create_tenant("three") { User.count }
+
+          keys = TenantedApplicationRecord.tenanted_connection_pools.keys
+          assert_includes(keys, [ "one", :writing ])
+          assert_not_includes(keys, [ "two", :writing ])
+
+          finish << true
+          busy.join
+
+          assert_equal(2, TenantedApplicationRecord.with_tenant("one") { User.count })
+        ensure
+          finish&.push(true)
+          busy&.join
+        end
+      end
+
+      test "pools that threads are using can take the process over the limit until they are idle" do
+        base_config.stub(:max_connection_pools, 1) do
+          TenantedApplicationRecord.create_tenant("one") { User.count }
+
+          in_transaction = Queue.new
+          finish = Queue.new
+          busy = Thread.new do
+            TenantedApplicationRecord.with_tenant("one") do
+              User.transaction do
+                User.count
+                in_transaction << true
+                finish.pop
+              end
+            end
+          end
+          in_transaction.pop
+
+          TenantedApplicationRecord.create_tenant("two") { User.count }
+
+          assert_equal(2, TenantedApplicationRecord.tenanted_connection_pools.size)
+
+          finish << true
+          busy.join
+          TenantedApplicationRecord.with_tenant("two") { User.count }
+
+          assert_equal([ [ "two", :writing ] ], TenantedApplicationRecord.tenanted_connection_pools.keys)
+        ensure
+          finish&.push(true)
+          busy&.join
+        end
+      end
+
+      test "a pool that was discarded after a fork is not used when reaping" do
+        base_config.stub(:max_connection_pools, 1) do
+          TenantedApplicationRecord.create_tenant("one") { User.count }
+          discarded = TenantedApplicationRecord.with_tenant("one") { TenantedApplicationRecord.connection_pool }
+          discarded.pool_config.discard_pool! # what Rails does to every pool in a forked child
+
+          assert_nothing_raised do
+            TenantedApplicationRecord.create_tenant("two") { User.count }
+          end
+          assert_equal([ [ "two", :writing ] ], TenantedApplicationRecord.tenanted_connection_pools.keys)
+        end
+      end
+    end
+
+    # A subtenant record delegates with_connection to its tenanted class, where the stub below can't
+    # intercept connection_pool.
+    for_each_scenario(except: { primary_db: [ :subtenant_record ] }) do
+      test "a query retries with a new pool when the pool it looked up is reaped before it connects" do
+        base_config.stub(:max_connection_pools, 1) do
+          TenantedApplicationRecord.create_tenant("one") { User.create!(email: "one@example.org") }
+          reaped = TenantedApplicationRecord.with_tenant("one") { TenantedApplicationRecord.connection_pool }
+          TenantedApplicationRecord.create_tenant("two") { User.count }
+
+          assert_not_includes(TenantedApplicationRecord.connection_handler.connection_pool_list(:all), reaped)
+
+          pools = [ reaped ]
+          connection_pool = User.method(:connection_pool)
+          User.stub(:connection_pool, ->(**kwargs) { pools.shift || connection_pool.call(**kwargs) }) do
+            assert_equal(1, TenantedApplicationRecord.with_tenant("one") { User.count })
+          end
+        end
+      end
+
+      test "a model's connection retries with a new pool when the pool it looked up is reaped" do
+        base_config.stub(:max_connection_pools, 1) do
+          TenantedApplicationRecord.create_tenant("one") { User.create!(email: "one@example.org") }
+          reaped = TenantedApplicationRecord.with_tenant("one") { TenantedApplicationRecord.connection_pool }
+          TenantedApplicationRecord.create_tenant("two") { User.count }
+
+          pools = [ reaped ]
+          connection_pool = User.method(:connection_pool)
+          User.stub(:connection_pool, ->(**kwargs) { pools.shift || connection_pool.call(**kwargs) }) do
+            assert_equal(1, TenantedApplicationRecord.with_tenant("one") { User.connection.select_value("SELECT COUNT(*) FROM users") })
+          end
+        end
+      end
+
+      test "a model's schema cache retries with a new pool when the pool it looked up is reaped" do
+        base_config.stub(:max_connection_pools, 1) do
+          TenantedApplicationRecord.create_tenant("one") { User.count }
+          reaped = TenantedApplicationRecord.with_tenant("one") { TenantedApplicationRecord.connection_pool }
+          TenantedApplicationRecord.create_tenant("two") { User.count }
+          reaped.schema_cache.clear_data_source_cache!("users")
+
+          pools = [ reaped ]
+          connection_pool = User.method(:connection_pool)
+          User.stub(:connection_pool, ->(**kwargs) { pools.shift || connection_pool.call(**kwargs) }) do
+            assert_includes(TenantedApplicationRecord.with_tenant("one") { User.schema_cache.columns("users").map(&:name) }, "email")
+          end
+        end
+      end
+
+      test "a schema cache got in one tenant never reads another tenant's schema" do
+        TenantedApplicationRecord.create_tenant("one") { User.count }
+        TenantedApplicationRecord.create_tenant("two") { User.count }
+        TenantedApplicationRecord.with_tenant("two") { User.connection.add_column(:users, :only_in_two, :string) }
+
+        cache = TenantedApplicationRecord.with_tenant("one") { User.schema_cache }
+        columns = TenantedApplicationRecord.with_tenant("two") { cache.columns("users").map(&:name) }
+
+        assert_not_includes(columns, "only_in_two")
+      end
+
+      test "a connection error from another pool is raised rather than retried" do
+        base_config.stub(:max_connection_pools, 1) do
+          TenantedApplicationRecord.create_tenant("one") { User.count }
+          reaped = TenantedApplicationRecord.with_tenant("one") { TenantedApplicationRecord.connection_pool }
+          TenantedApplicationRecord.create_tenant("two") { User.count }
+
+          other = TenantedApplicationRecord.with_tenant("two") { TenantedApplicationRecord.connection_pool }
+          lookups = 0
+          stale_first = ->(**) { lookups += 1; reaped }
+          error = ActiveRecord::ConnectionNotEstablished.new("database is down").set_pool(other)
+
+          User.stub(:connection_pool, stale_first) do
+            reaped.stub(:lease_connection, -> { raise error }) do
+              raised = assert_raises(ActiveRecord::ConnectionNotEstablished) do
+                TenantedApplicationRecord.with_tenant("one") { User.lease_connection }
+              end
+              assert_same(error, raised)
+            end
+          end
+          assert_equal(1, lookups)
+        end
+      end
+
+      test "a block that raises ConnectionNotEstablished itself is not run again" do
+        base_config.stub(:max_connection_pools, 1) do
+          TenantedApplicationRecord.create_tenant("one") { User.count }
+          TenantedApplicationRecord.create_tenant("two") { User.count }
+          live = TenantedApplicationRecord.with_tenant("one") { TenantedApplicationRecord.connection_pool }
+          runs = 0
+
+          TenantedApplicationRecord.with_tenant("one") do
+            assert_raises(ActiveRecord::ConnectionNotEstablished) do
+              User.with_connection do
+                runs += 1
+                # The pool is reaped while the block runs, and the block then fails with the error
+                # a reaped pool raises. The block has run, so it must not be run again.
+                TenantedApplicationRecord.connection_handler.remove_connection_pool(
+                  TenantedApplicationRecord.connection_specification_name, role: live.role, shard: live.shard)
+                raise ActiveRecord::ConnectionNotEstablished
+              end
+            end
+          end
+          assert_equal(1, runs)
+        end
+      end
+
+      test "a query stops retrying once the checkout timeout has passed" do
+        base_config.stub(:max_connection_pools, 1) do
+          TenantedApplicationRecord.create_tenant("one") { User.count }
+          reaped = TenantedApplicationRecord.with_tenant("one") { TenantedApplicationRecord.connection_pool }
+          TenantedApplicationRecord.create_tenant("two") { User.count }
+          reaped.checkout_timeout = 0.2
+
+          lookups = 0
+          always_stale = ->(**) { lookups += 1; reaped }
+
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          User.stub(:connection_pool, always_stale) do
+            assert_raises(ActiveRecord::ConnectionNotEstablished) do
+              TenantedApplicationRecord.with_tenant("one") { User.count }
+            end
+          end
+          elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+          assert_operator(lookups, :>, 1)
+          assert_operator(elapsed, :>=, 0.2)
+          assert_operator(elapsed, :<, 5)
+        end
+      end
+    end
+
     with_scenario(:primary_named_db, :primary_record) do
       test "handle race conditions when creating a new connection pool" do
         TenantedApplicationRecord.create_tenant("foo") do

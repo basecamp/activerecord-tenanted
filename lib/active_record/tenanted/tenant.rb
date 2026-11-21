@@ -308,11 +308,58 @@ module ActiveRecord
                   pool = retrieve_connection_pool(strict: true)
                 end
               end
+
+              reap_connection_pools(keep: [ current_tenant, current_role ])
             end
 
             pool
           else
             Tenanted::UntenantedConnectionPool.new(tenanted_root_config, self)
+          end
+        end
+
+        # The pool can be reaped between lookup and checkout; retry only until the block starts.
+        def with_connection(prevent_permanent_checkout: false, &block) # :nodoc:
+          checked_out = false
+          retry_on_reaped_connection_pool(started: -> { checked_out }) do |pool|
+            pool.with_connection(prevent_permanent_checkout: prevent_permanent_checkout) do |connection|
+              checked_out = true
+              block.call(connection)
+            end
+          end
+        end
+
+        def lease_connection # :nodoc:
+          retry_on_reaped_connection_pool { |pool| pool.lease_connection }
+        end
+
+        def connection # :nodoc:
+          retry_on_reaped_connection_pool { super }
+        end
+
+        # Rails binds a schema cache to one pool; move to the tenant's new pool if that one is reaped.
+        def schema_cache # :nodoc:
+          pool = connection_pool
+          return pool.schema_cache unless pool.is_a?(ActiveRecord::ConnectionAdapters::ConnectionPool)
+
+          ReapedPoolRetryingSchemaCache.new(self, pool)
+        end
+
+        class ReapedPoolRetryingSchemaCache # :nodoc:
+          def initialize(model, pool)
+            @model = model
+            @pool = pool
+          end
+
+          def method_missing(name, ...)
+            @model.send(:retry_on_reaped_connection_pool, pool: @pool) do |pool|
+              @pool = pool
+              pool.schema_cache.public_send(name, ...)
+            end
+          end
+
+          def respond_to_missing?(name, include_private = false)
+            @pool.schema_cache.respond_to?(name, include_private)
           end
         end
 
@@ -356,19 +403,108 @@ module ActiveRecord
             connection_handler.retrieve_connection_pool(connection_specification_name, role:, shard:, strict:).tap do |pool|
               if pool
                 tenanted_connection_pools[[ shard, role ]] = pool
-                reap_connection_pools
+                reap_connection_pools(keep: [ shard, role ]) unless CONNECTION_POOL_CREATION_LOCK.owned?
               end
             end
           end
 
-          def reap_connection_pools
-            while tenanted_connection_pools.size > tenanted_root_config.max_connection_pools
-              info, _ = *tenanted_connection_pools.pop
-              shard, role = *info
+          # A pool in use is skipped, so the limit can be exceeded until a later lookup reaps it.
+          def reap_connection_pools(keep:)
+            tenanted_connection_pools.keys.each do |shard, role|
+              break if tenanted_connection_pools.size <= tenanted_root_config.max_connection_pools
+              next if [ shard, role ] == keep
 
-              connection_handler.remove_connection_pool(connection_specification_name, role:, shard:)
-              Rails.logger.info "  REAPED [tenant=#{shard} role=#{role}] Tenanted connection pool reaped to limit total connection pools"
+              pool = connection_handler.retrieve_connection_pool(connection_specification_name, role:, shard:)
+
+              if pool.nil?
+                forget_removed_connection_pool([ shard, role ])
+              elsif reap_connection_pool(pool)
+                Rails.logger.info "  REAPED [tenant=#{shard} role=#{role}] Tenanted connection pool reaped to limit total connection pools"
+              end
             end
+          end
+
+          # remove_connection_pool steals checked-out connections, so empty the pool with disconnect,
+          # which raises instead. Lock order follows Rails' reaper; the other locks are only tried.
+          def reap_connection_pool(pool)
+            return false if pool.mon_owned?
+
+            pool.reaper_lock do
+              return false unless pool.mon_try_enter
+
+              begin
+                return false if pool.discarded? || connection_pool_in_use?(pool)
+
+                # disconnect waits for connections still being opened and releases the lock meanwhile.
+                pool.disconnect
+                return false if connection_pool_in_use?(pool) || pool.stat[:connections] > 0
+
+                remove_idle_connection_pool(pool)
+              rescue ActiveRecord::ExclusiveConnectionTimeoutError
+                false
+              ensure
+                pool.mon_exit
+              end
+            end
+          end
+
+          def remove_idle_connection_pool(pool)
+            return false unless pool.pool_config.mon_try_enter
+
+            begin
+              return false unless CONNECTION_POOL_CREATION_LOCK.try_lock
+
+              begin
+                current = connection_handler.retrieve_connection_pool(connection_specification_name, role: pool.role, shard: pool.shard)
+                return false unless current.equal?(pool)
+
+                tenanted_connection_pools.delete([ pool.shard, pool.role ])
+                connection_handler.remove_connection_pool(connection_specification_name, role: pool.role, shard: pool.shard)
+                true
+              ensure
+                CONNECTION_POOL_CREATION_LOCK.unlock
+              end
+            ensure
+              pool.pool_config.mon_exit
+            end
+          end
+
+          def forget_removed_connection_pool(key)
+            return unless CONNECTION_POOL_CREATION_LOCK.try_lock
+
+            begin
+              shard, role = key
+              unless connection_handler.retrieve_connection_pool(connection_specification_name, role:, shard:)
+                tenanted_connection_pools.delete(key)
+              end
+            ensure
+              CONNECTION_POOL_CREATION_LOCK.unlock
+            end
+          end
+
+          def retry_on_reaped_connection_pool(started: nil, pool: connection_pool)
+            deadline = nil
+            begin
+              yield pool
+            rescue ActiveRecord::ConnectionNotEstablished => error
+              # Rails tags errors from opening a connection with their pool; another pool's error is real.
+              raise if error.connection_pool && !error.connection_pool.equal?(pool)
+              raise if started&.call || !connection_pool_reaped?(pool) || pool.shard.to_s != current_tenant.to_s || pool.role != current_role
+              deadline ||= Process.clock_gettime(Process::CLOCK_MONOTONIC) + pool.checkout_timeout
+              raise if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+              pool = connection_pool
+              retry
+            end
+          end
+
+          def connection_pool_reaped?(pool)
+            pool.is_a?(ActiveRecord::ConnectionAdapters::ConnectionPool) &&
+              !connection_handler.retrieve_connection_pool(connection_specification_name, role: pool.role, shard: pool.shard).equal?(pool)
+          end
+
+          def connection_pool_in_use?(pool)
+            stat = pool.stat
+            stat[:busy] > 0 || stat[:waiting] > 0
           end
 
           def log_tenant_tag(tenant_name, &block)
