@@ -410,6 +410,8 @@ module ActiveRecord
 
           # A pool in use is skipped, so the limit can be exceeded until a later lookup reaps it.
           def reap_connection_pools(keep:)
+            return if tenanted_connection_pools.size <= tenanted_root_config.max_connection_pools
+
             tenanted_connection_pools.keys.each do |shard, role|
               break if tenanted_connection_pools.size <= tenanted_root_config.max_connection_pools
               next if [ shard, role ] == keep
