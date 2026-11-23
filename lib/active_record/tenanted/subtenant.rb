@@ -20,7 +20,7 @@ module ActiveRecord
           klass
         end
 
-        delegate :current_tenant, :connection_pool, to: :tenanted_subtenant_of
+        delegate :current_tenant, :connection_pool, :with_connection, :lease_connection, :connection, :schema_cache, to: :tenanted_subtenant_of
       end
 
       prepended do

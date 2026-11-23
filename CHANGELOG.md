@@ -2,6 +2,11 @@
 
 ## next / unreleased
 
+### Fixed
+
+- Reaping a pool to stay under `max_connection_pools` no longer takes a connection from a thread using it, which could leave a transaction half-written. Pools in use are skipped, so the limit can be exceeded until they are idle.
+- A model's `with_connection`, `lease_connection`, `connection` and `schema_cache` retry with the tenant's new pool, for up to `checkout_timeout`, when their pool is reaped before checkout. A pool object held directly can still raise `ActiveRecord::ConnectionNotEstablished`.
+
 ## v0.9.0 / 2026-10-19
 
 ### Security

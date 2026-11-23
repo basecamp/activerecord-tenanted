@@ -287,7 +287,7 @@ production:
     max_connection_pools: 20
 ```
 
-Active Record Tenanted will reap the least-recently-used connection pools when this limit is surpassed. Developers are encouraged to tune this parameter with care, since setting it too low may lead to increased request latency due to frequently re-establishing database connections, while setting it too high may consume precious file descriptors and memory resources.
+Active Record Tenanted will reap the least-recently-used connection pools when this limit is surpassed. Pools in use are skipped, so the limit can be exceeded until a later lookup finds them idle. Developers are encouraged to tune this parameter with care, since setting it too low may lead to increased request latency due to frequently re-establishing database connections, while setting it too high may consume precious file descriptors and memory resources.
 
 
 ### 2.4 Configuring the Connection Class

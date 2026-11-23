@@ -37,6 +37,10 @@ module ActiveRecord
       def keys
         @data.keys
       end
+
+      def delete(key)
+        @data.delete(key)
+      end
     end
 
     Lru = LRU
